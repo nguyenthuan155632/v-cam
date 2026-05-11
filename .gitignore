@@ -41,3 +41,4 @@ app/debug/
 # Bundled handoff artifacts (kept local)
 # Comment the next line out if you want the handoff in version control.
 # design_handoff_vcam/
+.gitnexus
