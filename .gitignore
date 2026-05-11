@@ -1,0 +1,43 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Android Studio / IntelliJ
+*.iml
+.idea/
+.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android build
+*.apk
+*.aab
+*.ap_
+*.dex
+local.properties
+
+# Keystore / signing
+*.jks
+*.keystore
+keystore.properties
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Logs / coverage
+*.log
+*.hprof
+/build-reports/
+
+# Output APKs (still tracked via build/ above, but be explicit)
+app/release/
+app/debug/
+
+# Bundled handoff artifacts (kept local)
+# Comment the next line out if you want the handoff in version control.
+# design_handoff_vcam/

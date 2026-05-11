@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V-Cam · Camera app design</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="vcam-shared.jsx"></script>
+<script type="text/babel" src="vcam-icons.jsx"></script>
+<script type="text/babel" src="vcam-camera.jsx"></script>
+<script type="text/babel" src="vcam-filters.jsx"></script>
+<script type="text/babel" src="vcam-preview.jsx"></script>
+<script type="text/babel" src="vcam-settings.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "#F27A66"
+}/*EDITMODE-END*/;
+
+const ACCENT_OPTIONS = [
+  "#F27A66", // soft coral (default)
+  "#E8B583", // warm beige
+  "#F1A8B5", // pastel pink
+  "#B5A89A"  // taupe
+];
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const accent = t.accent;
+
+  return (
+    <>
+      <DesignCanvas>
+        <DCSection id="brief" title="V-Cam" subtitle="Camera & filters · Android · Material 3 influence">
+          <DCArtboard id="cover" label="Cover" width={760} height={720}>
+            <div style={{
+              width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+              padding: '52px 56px', boxSizing: 'border-box',
+              background: V.paper, fontFamily: VFonts.ui, color: V.ink,
+              position: 'relative', overflow: 'hidden',
+            }}>
+              {/* tiny brand mark */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 8,
+                  background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff',
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round">
+                    <path d="M3 7h3l2-3h8l2 3h3v12H3z"/><circle cx="12" cy="13" r="4"/>
+                  </svg>
+                </div>
+                <div style={{ fontFamily: VFonts.mono, fontSize: 11, letterSpacing: 2, color: V.ink70 }}>V·CAM</div>
+              </div>
+              <div style={{ fontFamily: VFonts.serif, fontSize: 76, lineHeight: 0.96, fontStyle: 'italic', letterSpacing: -1, marginBottom: 12 }}>
+                A camera<br/>worth opening.
+              </div>
+              <div style={{ fontSize: 16, lineHeight: 1.5, color: V.ink70, maxWidth: 480 }}>
+                A fast, focused capture app. Beautiful filters for food, cafés, travel and everyday photos — applied live, adjustable after. Nothing else.
+              </div>
+              <div style={{ flex: 1 }} />
+              <div style={{ display: 'flex', gap: 36, fontFamily: VFonts.mono, fontSize: 10.5, letterSpacing: 1.6, color: V.ink50 }}>
+                <div><div style={{ color: V.ink, marginBottom: 2 }}>{FILTERS.length}</div>FILTERS</div>
+                <div><div style={{ color: V.ink, marginBottom: 2 }}>{CATEGORIES.length}</div>CATEGORIES</div>
+                <div><div style={{ color: V.ink, marginBottom: 2 }}>4</div>SCREENS</div>
+                <div><div style={{ color: V.ink, marginBottom: 2 }}>0</div>SOCIAL FEATURES</div>
+              </div>
+              {/* accent swatches in corner */}
+              <div style={{ position: 'absolute', top: 52, right: 56, display: 'flex', gap: 8 }}>
+                <div style={{ width: 22, height: 22, borderRadius: 11, background: V.coral }}/>
+                <div style={{ width: 22, height: 22, borderRadius: 11, background: V.beige }}/>
+                <div style={{ width: 22, height: 22, borderRadius: 11, background: V.ink }}/>
+                <div style={{ width: 22, height: 22, borderRadius: 11, background: V.paper, border: `1px solid ${V.ink12}` }}/>
+              </div>
+            </div>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="camera" title="01 · Camera screen" subtitle="Live preview · 3 variations to choose from">
+          <DCArtboard id="classic" label="Classic — minimal" width={PHONE_W} height={PHONE_H}>
+            <CameraClassic accent={accent} activeFilter={0} ratio="4:3" grid />
+          </DCArtboard>
+          <DCArtboard id="pro" label="Pro — bottom card" width={PHONE_W} height={PHONE_H}>
+            <CameraPro accent={accent} activeFilter={6} ratio="1:1" />
+          </DCArtboard>
+          <DCArtboard id="minimal" label="Full-bleed — invisible UI" width={PHONE_W} height={PHONE_H}>
+            <CameraMinimal accent={accent} activeFilter={2} ratio="16:9" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="filters" title="02 · Filter browser" subtitle={`${CATEGORIES.length} categories · ${FILTERS.length} filters with intensity`}>
+          <DCArtboard id="library" label="Library" width={PHONE_W} height={PHONE_H}>
+            <FilterBrowser accent={accent} activeCat="Food" activeFilter={0} intensity={80} />
+          </DCArtboard>
+          <DCArtboard id="cafe" label="Library — Cafe" width={PHONE_W} height={PHONE_H}>
+            <FilterBrowser accent={accent} activeCat="Cafe" activeFilter={1} intensity={65} />
+          </DCArtboard>
+          <DCArtboard id="intensity" label="Intensity in action" width={PHONE_W} height={PHONE_H}>
+            <CameraIntensity accent={accent} activeFilter={1} intensity={65} />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="preview" title="03 · Photo preview" subtitle="Re-edit filter & intensity after capture">
+          <DCArtboard id="preview-default" label="Just captured" width={PHONE_W} height={PHONE_H}>
+            <PhotoPreview accent={accent} activeFilter={0} intensity={100} />
+          </DCArtboard>
+          <DCArtboard id="preview-edit" label="Switched filter · 70%" width={PHONE_W} height={PHONE_H}>
+            <PhotoPreview accent={accent} activeFilter={3} intensity={70} />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="settings" title="04 · Settings" subtitle="Lean — capture, defaults, appearance">
+          <DCArtboard id="settings-main" label="Settings" width={PHONE_W} height={PHONE_H}>
+            <SettingsScreen accent={accent} />
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+
+      <TweaksPanel>
+        <TweakSection label="Accent" />
+        <TweakColor label="Color" value={accent}
+          options={ACCENT_OPTIONS}
+          onChange={(v) => setTweak('accent', v)} />
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
