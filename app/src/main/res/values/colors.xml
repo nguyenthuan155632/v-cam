@@ -2,4 +2,5 @@
 <resources>
     <color name="paper">#FAF7F2</color>
     <color name="ink">#15110E</color>
+    <color name="ic_launcher_background">#FAF7F2</color>
 </resources>
