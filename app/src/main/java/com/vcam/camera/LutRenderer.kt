@@ -170,7 +170,7 @@ class LutRenderer(
 
     private fun buildProgram(): Int {
         val vs = compile(GLES20.GL_VERTEX_SHADER, LutShaders.VERTEX_SHADER)
-        val fs = compile(GLES20.GL_FRAGMENT_SHADER, LutShaders.FRAGMENT_SHADER)
+        val fs = compile(GLES20.GL_FRAGMENT_SHADER, LutShaders.PREVIEW_FRAGMENT)
         val p = GLES20.glCreateProgram()
         GLES20.glAttachShader(p, vs)
         GLES20.glAttachShader(p, fs)
