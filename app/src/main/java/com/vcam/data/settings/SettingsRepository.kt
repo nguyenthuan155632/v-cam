@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.vcam.color.LegacyFilterIdMap
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -33,7 +34,7 @@ class SettingsRepository(private val context: Context) {
             gridLines = p[Keys.GridLines] ?: false,
             cameraSound = p[Keys.CameraSound] ?: false,
             defaultAspectRatio = AspectRatio.fromLabel(p[Keys.DefaultRatio] ?: "4:3"),
-            defaultFilterId = p[Keys.DefaultFilter] ?: "food_fresh",
+            defaultFilterId = LegacyFilterIdMap.migrate(p[Keys.DefaultFilter] ?: "food_fresh"),
             defaultIntensity = p[Keys.DefaultIntensity] ?: 80,
             theme = runCatching { AppTheme.valueOf(p[Keys.Theme] ?: "Light") }.getOrDefault(AppTheme.Light),
         )
