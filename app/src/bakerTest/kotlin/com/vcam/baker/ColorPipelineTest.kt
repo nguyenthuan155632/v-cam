@@ -97,4 +97,64 @@ class ColorPipelineTest {
         val swap = ChannelMixer(0f, 0f, 1f, 0f, 1f, 0f, 1f, 0f, 0f)
         assertRgbEquals(Rgb(0.8f, 0.5f, 0.2f), ColorPipeline.channelMix(input, swap))
     }
+
+    @Test
+    fun lumaRec601Coefficients() {
+        assertEquals(0.299f, ColorPipeline.luma(Rgb(1f, 0f, 0f)), 1e-4f)
+        assertEquals(0.587f, ColorPipeline.luma(Rgb(0f, 1f, 0f)), 1e-4f)
+        assertEquals(0.114f, ColorPipeline.luma(Rgb(0f, 0f, 1f)), 1e-4f)
+    }
+
+    @Test
+    fun saturationOneIsIdentity() {
+        val input = Rgb(0.7f, 0.3f, 0.1f)
+        assertRgbEquals(input, ColorPipeline.saturate(input, 1f))
+    }
+
+    @Test
+    fun saturationZeroProducesGrayscale() {
+        val input = Rgb(0.7f, 0.3f, 0.1f)
+        val out = ColorPipeline.saturate(input, 0f)
+        val l = ColorPipeline.luma(input)
+        assertRgbEquals(Rgb(l, l, l), out)
+    }
+
+    @Test
+    fun toneCurveLinearIsIdentity() {
+        val input = Rgb(0.2f, 0.5f, 0.8f)
+        assertRgbEquals(input, ColorPipeline.applyToneCurve(input, ToneCurve.linear()))
+    }
+
+    @Test
+    fun toneCurveSCurveLowersShadowsRaisesHighlights() {
+        val curve = ToneCurve(listOf(0f to 0f, 0.25f to 0.18f, 0.5f to 0.5f, 0.75f to 0.82f, 1f to 1f))
+        val shadow = ColorPipeline.applyToneCurve(Rgb(0.25f, 0.25f, 0.25f), curve)
+        val highlight = ColorPipeline.applyToneCurve(Rgb(0.75f, 0.75f, 0.75f), curve)
+        assertEquals(0.18f, shadow.r, 1e-3f)
+        assertEquals(0.82f, highlight.r, 1e-3f)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun toneCurveRejectsDuplicateXValues() {
+        ToneCurve(listOf(0f to 0f, 0.5f to 0.4f, 0.5f to 0.6f, 1f to 1f))
+    }
+
+    @Test
+    fun splitToningNullIsIdentity() {
+        val input = Rgb(0.4f, 0.5f, 0.6f)
+        assertRgbEquals(input, ColorPipeline.applySplitToning(input, null))
+    }
+
+    @Test
+    fun splitToningTintsShadowsAndHighlights() {
+        val st = SplitToning(
+            shadowTint = Rgb(0.0f, 0.0f, 1.0f),
+            highlightTint = Rgb(1.0f, 0.5f, 0.0f),
+            balance = 0.5f,
+        )
+        val shadow = ColorPipeline.applySplitToning(Rgb(0.1f, 0.1f, 0.1f), st)
+        val highlight = ColorPipeline.applySplitToning(Rgb(0.9f, 0.9f, 0.9f), st)
+        assertEquals(true, shadow.b > 0.1f)
+        assertEquals(true, highlight.r > 0.9f - 1e-3f && highlight.b < 0.9f)
+    }
 }

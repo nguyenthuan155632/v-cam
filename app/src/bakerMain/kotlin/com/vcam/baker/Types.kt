@@ -15,7 +15,15 @@ data class ChannelMixer(
 }
 
 data class ToneCurve(val points: List<Pair<Float, Float>>) {
-    init { require(points.size >= 2) { "tone curve needs at least 2 points" } }
+    init {
+        require(points.size >= 2) { "tone curve needs at least 2 points" }
+        points.forEach { (x, y) ->
+            require(x.isFinite() && y.isFinite()) { "tone curve points must be finite" }
+        }
+        points.zipWithNext().forEach { (left, right) ->
+            require(left.first < right.first) { "tone curve x values must be strictly increasing" }
+        }
+    }
 
     companion object {
         fun linear() = ToneCurve(listOf(0f to 0f, 1f to 1f))

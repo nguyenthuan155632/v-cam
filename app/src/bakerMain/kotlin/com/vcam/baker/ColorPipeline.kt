@@ -36,4 +36,47 @@ object ColorPipeline {
         c.r * m.gr + c.g * m.gg + c.b * m.gb,
         c.r * m.br + c.g * m.bg + c.b * m.bb,
     )
+
+    fun luma(c: Rgb): Float = 0.299f * c.r + 0.587f * c.g + 0.114f * c.b
+
+    fun saturate(c: Rgb, amount: Float): Rgb {
+        val l = luma(c)
+        return Rgb(
+            l + (c.r - l) * amount,
+            l + (c.g - l) * amount,
+            l + (c.b - l) * amount,
+        )
+    }
+
+    fun applySplitToning(c: Rgb, st: SplitToning?): Rgb {
+        if (st == null) return c
+        val l = luma(c)
+        val shadowWeight = (1f - l).coerceIn(0f, 1f)
+        val highlightWeight = l.coerceIn(0f, 1f)
+        val sw = shadowWeight * (1f - st.balance) * 2f
+        val hw = highlightWeight * st.balance * 2f
+        return Rgb(
+            c.r + (st.shadowTint.r - c.r) * sw * 0.3f + (st.highlightTint.r - c.r) * hw * 0.3f,
+            c.g + (st.shadowTint.g - c.g) * sw * 0.3f + (st.highlightTint.g - c.g) * hw * 0.3f,
+            c.b + (st.shadowTint.b - c.b) * sw * 0.3f + (st.highlightTint.b - c.b) * hw * 0.3f,
+        )
+    }
+
+    fun applyToneCurve(c: Rgb, curve: ToneCurve): Rgb =
+        Rgb(curveLookup(c.r, curve), curveLookup(c.g, curve), curveLookup(c.b, curve))
+
+    private fun curveLookup(v: Float, curve: ToneCurve): Float {
+        val pts = curve.points.sortedBy { it.first }
+        if (v <= pts.first().first) return pts.first().second
+        if (v >= pts.last().first) return pts.last().second
+        for (i in 0 until pts.size - 1) {
+            val (x0, y0) = pts[i]
+            val (x1, y1) = pts[i + 1]
+            if (v in x0..x1) {
+                val t = (v - x0) / (x1 - x0)
+                return y0 + (y1 - y0) * t
+            }
+        }
+        return v
+    }
 }
