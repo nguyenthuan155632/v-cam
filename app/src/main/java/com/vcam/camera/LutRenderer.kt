@@ -44,6 +44,10 @@ class LutRenderer(
 
     private var viewportW = 1
     private var viewportH = 1
+    private var sourceW = 1
+    private var sourceH = 1
+    private var textureCrop = TextureCrop(0f, 1f, 0f, 1f)
+    private val surfaceReadyGate = SurfaceReadyGate()
 
     private val vertexBuffer: FloatBuffer = ByteBuffer
         .allocateDirect(VERTICES.size * 4)
@@ -58,6 +62,27 @@ class LutRenderer(
         .apply { put(TEX_COORDS); position(0) }
 
     fun submitLut(lut: CubeLut) { pendingLut.set(lut); glSurfaceView?.requestRender() }
+
+    fun updateSourceSize(width: Int, height: Int) {
+        sourceW = width.coerceAtLeast(1)
+        sourceH = height.coerceAtLeast(1)
+        updateTextureCrop()
+    }
+
+    private fun updateTextureCrop() {
+        textureCrop = TextureCrop.centerCrop(sourceW, sourceH, viewportW, viewportH)
+        texBuffer.position(0)
+        texBuffer.put(
+            floatArrayOf(
+                textureCrop.uMin, textureCrop.vMin,
+                textureCrop.uMax, textureCrop.vMin,
+                textureCrop.uMin, textureCrop.vMax,
+                textureCrop.uMax, textureCrop.vMax,
+            ),
+        )
+        texBuffer.position(0)
+        glSurfaceView?.requestRender()
+    }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         program = buildProgram()
@@ -74,14 +99,22 @@ class LutRenderer(
 
         val st = SurfaceTexture(cameraTexId).also { it.setOnFrameAvailableListener(this) }
         surfaceTexture = st
-        onSurfaceTextureReady(st, viewportW, viewportH)
+        if (surfaceReadyGate.markSurfaceTextureReady(viewportW, viewportH)) {
+            onSurfaceTextureReady(st, viewportW, viewportH)
+        }
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         viewportW = width
         viewportH = height
+        updateTextureCrop()
         GLES20.glViewport(0, 0, width, height)
-        surfaceTexture?.setDefaultBufferSize(width, height)
+        surfaceTexture?.let { st ->
+            st.setDefaultBufferSize(width, height)
+            if (surfaceReadyGate.markSurfaceSizeChanged(width, height)) {
+                onSurfaceTextureReady(st, width, height)
+            }
+        }
     }
 
     override fun onDrawFrame(gl: GL10?) {

@@ -42,3 +42,4 @@ app/debug/
 # Comment the next line out if you want the handoff in version control.
 # design_handoff_vcam/
 .gitnexus
+.claude/settings.local.json

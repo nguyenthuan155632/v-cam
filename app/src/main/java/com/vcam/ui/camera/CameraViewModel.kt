@@ -39,6 +39,9 @@ class CameraViewModel(private val repo: SettingsRepository) : ViewModel() {
         val next = order[(order.indexOf(it.aspectRatio) + 1) % order.size]
         it.copy(aspectRatio = next)
     }
+    fun setAspectRatio(ratio: com.vcam.data.settings.AspectRatio) = _state.update {
+        it.copy(aspectRatio = selectAspectRatio(it.aspectRatio, ratio))
+    }
     fun toggleGrid() = _state.update { it.copy(gridOn = !it.gridOn) }
     fun flipCamera() = _state.update { it.copy(frontFacing = !it.frontFacing) }
     fun setActiveFilter(index: Int) = _state.update {
@@ -46,6 +49,13 @@ class CameraViewModel(private val repo: SettingsRepository) : ViewModel() {
     }
     fun setIntensity(v: Int) = _state.update { it.copy(intensity = v.coerceIn(0, 100)) }
     fun toggleIntensitySheet() = _state.update { it.copy(intensitySheetOpen = !it.intensitySheetOpen) }
+
+    companion object {
+        fun selectAspectRatio(
+            current: com.vcam.data.settings.AspectRatio,
+            selected: com.vcam.data.settings.AspectRatio,
+        ): com.vcam.data.settings.AspectRatio = selected
+    }
 
     class Factory(private val repo: SettingsRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")

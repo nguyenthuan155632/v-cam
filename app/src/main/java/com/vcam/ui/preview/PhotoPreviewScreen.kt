@@ -50,11 +50,16 @@ import com.vcam.ui.components.photoBrush
 import com.vcam.ui.components.photoKindAt
 import com.vcam.ui.icons.VIcons
 
+object PhotoPreviewActions {
+    fun save(onSave: () -> Unit) = onSave()
+}
+
 @Composable
 fun PhotoPreviewScreen(
     photoId: String,
     onClose: () -> Unit,
     onRetake: () -> Unit,
+    onSave: () -> Unit = onClose,
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as VCamApplication
@@ -244,7 +249,7 @@ fun PhotoPreviewScreen(
                     .height(46.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(VColors.Ink)
-                    .clickable { /* save handled at higher level later */ },
+                    .clickable { PhotoPreviewActions.save(onSave) },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {

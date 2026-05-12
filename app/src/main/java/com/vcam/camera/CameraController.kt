@@ -5,17 +5,23 @@ import android.content.Context
 import android.graphics.SurfaceTexture
 import android.os.Build
 import android.provider.MediaStore
-import android.util.Size
+import android.util.Log
 import android.view.Surface
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
+import androidx.camera.core.SurfaceOrientedMeteringPointFactory
 import androidx.camera.core.SurfaceRequest
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.google.common.util.concurrent.ListenableFuture
+import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
 /**
@@ -27,8 +33,35 @@ class CameraController(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner,
 ) {
+    sealed interface ExposureCompensationState {
+        data object Unsupported : ExposureCompensationState
+        data class Supported(
+            val minIndex: Int,
+            val maxIndex: Int,
+            val currentIndex: Int,
+        ) : ExposureCompensationState
+    }
+
+    internal companion object {
+        const val imageCaptureJpegQuality = 100
+        private const val tag = "CameraController"
+
+        fun resolutionSelectorFor(targetAspectRatio: Int?): ResolutionSelector? = targetAspectRatio?.let {
+            ResolutionSelector.Builder()
+                .setAspectRatioStrategy(AspectRatioStrategy(it, AspectRatioStrategy.FALLBACK_RULE_AUTO))
+                .build()
+        }
+
+        fun canFocusAndMeterAt(x: Float, y: Float, width: Int, height: Int): Boolean =
+            width > 0 && height > 0 && x >= 0f && y >= 0f && x < width && y < height
+
+        fun clampExposureIndex(index: Int, min: Int, max: Int): Int = index.coerceIn(min, max)
+    }
+
     private val executor = Executors.newSingleThreadExecutor()
+    private val mainExecutor: Executor = ContextCompat.getMainExecutor(context)
     private var imageCapture: ImageCapture? = null
+    private var camera: Camera? = null
     private var lensFacing: Int = CameraSelector.LENS_FACING_BACK
     private var providerFuture: ListenableFuture<ProcessCameraProvider>? = null
 
@@ -37,6 +70,8 @@ class CameraController(
         width: Int,
         height: Int,
         flashMode: Int = ImageCapture.FLASH_MODE_AUTO,
+        targetAspectRatio: Int? = null,
+        onResolutionSelected: ((Int, Int) -> Unit)? = null,
     ) {
         surfaceTexture.setDefaultBufferSize(width.coerceAtLeast(1), height.coerceAtLeast(1))
         val future = ProcessCameraProvider.getInstance(context)
@@ -45,35 +80,110 @@ class CameraController(
             val provider = future.get()
             provider.unbindAll()
 
-            val preview = Preview.Builder()
-                .setTargetResolution(Size(width.coerceAtLeast(1), height.coerceAtLeast(1)))
+            val resolutionSelector = resolutionSelectorFor(targetAspectRatio)
+            val previewBuilder = Preview.Builder()
+                .setTargetRotation(Surface.ROTATION_0)
+            resolutionSelector?.let { previewBuilder.setResolutionSelector(it) }
+            val preview = previewBuilder
                 .build()
                 .also {
                     it.setSurfaceProvider { request: SurfaceRequest ->
+                        surfaceTexture.setDefaultBufferSize(
+                            request.resolution.width,
+                            request.resolution.height,
+                        )
+                        onResolutionSelected?.invoke(request.resolution.width, request.resolution.height)
                         val surface = Surface(surfaceTexture)
                         request.provideSurface(surface, executor) { surface.release() }
                     }
                 }
 
-            val capture = ImageCapture.Builder()
+            val captureBuilder = ImageCapture.Builder()
+                .setTargetRotation(Surface.ROTATION_0)
                 .setFlashMode(flashMode)
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                .build()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                .setJpegQuality(imageCaptureJpegQuality)
+            resolutionSelector?.let { captureBuilder.setResolutionSelector(it) }
+            val capture = captureBuilder.build()
             imageCapture = capture
 
             val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
-            provider.bindToLifecycle(lifecycleOwner, selector, preview, capture)
-        }, ContextCompat.getMainExecutor(context))
+            camera = provider.bindToLifecycle(lifecycleOwner, selector, preview, capture)
+        }, mainExecutor)
     }
 
     fun setFlashMode(mode: Int) {
         imageCapture?.flashMode = mode
     }
 
-    fun flipCamera(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
+    fun rebind(
+        surfaceTexture: SurfaceTexture,
+        width: Int,
+        height: Int,
+        targetAspectRatio: Int? = null,
+        onResolutionSelected: ((Int, Int) -> Unit)? = null,
+    ) {
+        bindToSurfaceTexture(
+            surfaceTexture,
+            width,
+            height,
+            imageCapture?.flashMode ?: ImageCapture.FLASH_MODE_AUTO,
+            targetAspectRatio,
+            onResolutionSelected,
+        )
+    }
+
+    fun flipCamera(
+        surfaceTexture: SurfaceTexture,
+        width: Int,
+        height: Int,
+        targetAspectRatio: Int? = null,
+        onResolutionSelected: ((Int, Int) -> Unit)? = null,
+    ) {
         lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK)
             CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
-        bindToSurfaceTexture(surfaceTexture, width, height, imageCapture?.flashMode ?: ImageCapture.FLASH_MODE_AUTO)
+        rebind(surfaceTexture, width, height, targetAspectRatio, onResolutionSelected)
+    }
+
+    fun exposureCompensationState(): ExposureCompensationState {
+        val exposureState = camera?.cameraInfo?.exposureState ?: return ExposureCompensationState.Unsupported
+        if (!exposureState.isExposureCompensationSupported) return ExposureCompensationState.Unsupported
+        return ExposureCompensationState.Supported(
+            minIndex = exposureState.exposureCompensationRange.lower,
+            maxIndex = exposureState.exposureCompensationRange.upper,
+            currentIndex = exposureState.exposureCompensationIndex,
+        )
+    }
+
+    fun setExposureCompensationIndex(index: Int): Boolean {
+        val boundCamera = camera ?: return false
+        val state = exposureCompensationState() as? ExposureCompensationState.Supported ?: return false
+        val clampedIndex = clampExposureIndex(index, state.minIndex, state.maxIndex)
+        boundCamera.cameraControl.setExposureCompensationIndex(clampedIndex)
+        return true
+    }
+
+    fun focusAndMeterAt(x: Float, y: Float, width: Int, height: Int): Boolean {
+        val boundCamera = camera ?: return false
+        if (!canFocusAndMeterAt(x, y, width, height)) return false
+
+        val factory = SurfaceOrientedMeteringPointFactory(width.toFloat(), height.toFloat())
+        val point = factory.createPoint(x, y)
+        val action = FocusMeteringAction.Builder(
+            point,
+            FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE,
+        ).build()
+        val result = boundCamera.cameraControl.startFocusAndMetering(action)
+        result.addListener({
+            runCatching { result.get() }
+                .onSuccess { focusMeteringResult ->
+                    Log.d(tag, "Focus metering success=${focusMeteringResult.isFocusSuccessful}")
+                }
+                .onFailure { throwable ->
+                    Log.d(tag, "Focus metering failed", throwable)
+                }
+        }, mainExecutor)
+        return true
     }
 
     /** Capture a JPEG to MediaStore/Pictures/VCam. Returns the inserted Uri string. */
@@ -95,10 +205,11 @@ class CameraController(
 
         capture.takePicture(output, executor, object : ImageCapture.OnImageSavedCallback {
             override fun onImageSaved(results: ImageCapture.OutputFileResults) {
-                onSaved(results.savedUri?.toString())
+                mainExecutor.execute { onSaved(results.savedUri?.toString()) }
             }
+
             override fun onError(exception: ImageCaptureException) {
-                onSaved(null)
+                mainExecutor.execute { onSaved(null) }
             }
         })
     }
