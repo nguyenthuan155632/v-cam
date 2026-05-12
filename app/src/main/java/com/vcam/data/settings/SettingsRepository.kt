@@ -33,7 +33,7 @@ class SettingsRepository(private val context: Context) {
             gridLines = p[Keys.GridLines] ?: false,
             cameraSound = p[Keys.CameraSound] ?: false,
             defaultAspectRatio = AspectRatio.fromLabel(p[Keys.DefaultRatio] ?: "4:3"),
-            defaultFilterId = p[Keys.DefaultFilter] ?: "fd01",
+            defaultFilterId = p[Keys.DefaultFilter] ?: "food_fresh",
             defaultIntensity = p[Keys.DefaultIntensity] ?: 80,
             theme = runCatching { AppTheme.valueOf(p[Keys.Theme] ?: "Light") }.getOrDefault(AppTheme.Light),
         )

@@ -23,7 +23,7 @@ data class UserSettings(
     val gridLines: Boolean = false,
     val cameraSound: Boolean = false,
     val defaultAspectRatio: AspectRatio = AspectRatio.Ratio4x3,
-    val defaultFilterId: String = "fd01",
+    val defaultFilterId: String = "food_fresh",
     val defaultIntensity: Int = 80,
     val theme: AppTheme = AppTheme.Light,
     val version: String = "2.4.1",
