@@ -44,6 +44,9 @@ android {
     }
 }
 
+val bakerCompiler by configurations.creating
+val bakerRuntime by configurations.creating
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -73,4 +76,50 @@ dependencies {
     testImplementation("androidx.test:core:1.6.1")
     testImplementation("androidx.lifecycle:lifecycle-runtime-testing:2.8.6")
     testImplementation("org.robolectric:robolectric:4.13")
+
+    bakerCompiler("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.0.20")
+    bakerRuntime("org.jetbrains.kotlin:kotlin-stdlib:2.0.20")
+}
+
+// --- Procedural LUT baker (build-time only; not shipped in APK) ---
+val bakerClassesDir = layout.buildDirectory.dir("classes/kotlin/bakerMain")
+val bakerSources = fileTree("src/bakerMain/kotlin") { include("**/*.kt") }
+
+val compileBakerMain by tasks.registering(JavaExec::class) {
+    group = "vcam"
+    description = "Compile build-time LUT baker sources."
+    classpath = bakerCompiler
+    mainClass.set("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler")
+    inputs.files(bakerSources)
+    outputs.dir(bakerClassesDir)
+    doFirst {
+        args(
+            "-jvm-target", "17",
+            "-no-stdlib",
+            "-no-reflect",
+            "-classpath", bakerRuntime.asPath,
+            "-d", bakerClassesDir.get().asFile.absolutePath,
+        )
+        args(bakerSources.files.map { it.absolutePath })
+    }
+}
+
+tasks.register<JavaExec>("bakeLuts") {
+    group = "vcam"
+    description = "Generate procedural LUT .cube files and reference image into assets/."
+    dependsOn(compileBakerMain)
+    classpath = files(bakerClassesDir) + bakerRuntime
+    mainClass.set("com.vcam.baker.MainKt")
+    args(layout.projectDirectory.dir("src/main/assets").asFile.absolutePath)
+    inputs.dir("src/bakerMain/kotlin")
+    outputs.dir(layout.projectDirectory.dir("src/main/assets/luts"))
+    outputs.file(layout.projectDirectory.file("src/main/assets/thumbs/reference.png"))
+}
+
+tasks.named("preBuild") { dependsOn("bakeLuts") }
+
+tasks.register<Test>("bakerUnitTest") {
+    group = "verification"
+    description = "Run JVM unit tests for the LUT baker."
+    useJUnit()
 }
