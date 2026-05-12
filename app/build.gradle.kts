@@ -81,6 +81,10 @@ dependencies {
     testImplementation("androidx.lifecycle:lifecycle-runtime-testing:2.8.6")
     testImplementation("org.robolectric:robolectric:4.13")
 
+    androidTestImplementation(libs.junit)
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
     bakerCompiler("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.0.20")
     bakerRuntime("org.jetbrains.kotlin:kotlin-stdlib:2.0.20")
     bakerTestRuntime("org.jetbrains.kotlin:kotlin-stdlib:2.0.20")
