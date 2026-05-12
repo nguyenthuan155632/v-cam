@@ -65,6 +65,19 @@ object ColorPipeline {
     fun applyToneCurve(c: Rgb, curve: ToneCurve): Rgb =
         Rgb(curveLookup(c.r, curve), curveLookup(c.g, curve), curveLookup(c.b, curve))
 
+    fun apply(input: Rgb, p: FilterParams): Rgb {
+        var c = input
+        c = whiteBalance(c, p.whiteBalance)
+        c = liftGammaGain(c, p.lift, p.gamma, p.gain)
+        c = brightness(c, p.brightness)
+        c = contrast(c, p.contrast)
+        c = channelMix(c, p.channelMixer)
+        c = saturate(c, p.saturation)
+        c = applySplitToning(c, p.splitToning)
+        c = applyToneCurve(c, p.toneCurve)
+        return Rgb(c.r.coerceIn(0f, 1f), c.g.coerceIn(0f, 1f), c.b.coerceIn(0f, 1f))
+    }
+
     private fun curveLookup(v: Float, curve: ToneCurve): Float {
         val pts = curve.points.sortedBy { it.first }
         if (v <= pts.first().first) return pts.first().second

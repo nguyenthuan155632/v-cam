@@ -157,4 +157,54 @@ class ColorPipelineTest {
         assertEquals(true, shadow.b > 0.1f)
         assertEquals(true, highlight.r > 0.9f - 1e-3f && highlight.b < 0.9f)
     }
+
+    @Test
+    fun applyDefaultParamsIsIdentity() {
+        val input = Rgb(0.4f, 0.5f, 0.6f)
+        assertRgbEquals(input, ColorPipeline.apply(input, FilterParams()))
+    }
+
+    @Test
+    fun applyClampsTo0_1() {
+        val input = Rgb(0.5f, 0.5f, 0.5f)
+        val out = ColorPipeline.apply(input, FilterParams(brightness = 2f))
+        assertRgbEquals(Rgb(1f, 1f, 1f), out)
+        val out2 = ColorPipeline.apply(input, FilterParams(brightness = -2f))
+        assertRgbEquals(Rgb(0f, 0f, 0f), out2)
+    }
+
+    @Test
+    fun applyClampsAfterToneCurve() {
+        val input = Rgb(0f, 1f, 1f)
+        val out = ColorPipeline.apply(input, FilterParams(toneCurve = ToneCurve(listOf(0f to -0.5f, 1f to 1.5f))))
+        assertRgbEquals(Rgb(0f, 1f, 1f), out)
+    }
+
+    @Test
+    fun applyOrderMatches_WB_then_LGG_then_brightness_then_contrast_then_mixer_then_sat_then_tone() {
+        val input = Rgb(0.25f, 0.5f, 0.75f)
+        val params = FilterParams(
+            whiteBalance = WhiteBalance(tempShift = 0.1f, tintShift = -0.1f),
+            lift = Rgb(0.05f, 0.02f, 0.01f),
+            gamma = Rgb(1.2f, 0.9f, 1.1f),
+            gain = Rgb(1.1f, 0.95f, 1.05f),
+            brightness = 0.03f,
+            contrast = 1.1f,
+            channelMixer = ChannelMixer(1f, 0.05f, 0f, 0f, 1f, 0.04f, 0.03f, 0f, 1f),
+            saturation = 0.8f,
+            splitToning = SplitToning(Rgb(0f, 0f, 1f), Rgb(1f, 0.8f, 0f), balance = 0.6f),
+            toneCurve = ToneCurve(listOf(0f to 0f, 0.5f to 0.45f, 1f to 1f)),
+        )
+        var expected = input
+        expected = ColorPipeline.whiteBalance(expected, params.whiteBalance)
+        expected = ColorPipeline.liftGammaGain(expected, params.lift, params.gamma, params.gain)
+        expected = ColorPipeline.brightness(expected, params.brightness)
+        expected = ColorPipeline.contrast(expected, params.contrast)
+        expected = ColorPipeline.channelMix(expected, params.channelMixer)
+        expected = ColorPipeline.saturate(expected, params.saturation)
+        expected = ColorPipeline.applySplitToning(expected, params.splitToning)
+        expected = ColorPipeline.applyToneCurve(expected, params.toneCurve)
+        expected = Rgb(expected.r.coerceIn(0f, 1f), expected.g.coerceIn(0f, 1f), expected.b.coerceIn(0f, 1f))
+        assertRgbEquals(expected, ColorPipeline.apply(input, params))
+    }
 }
