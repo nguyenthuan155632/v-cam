@@ -91,7 +91,7 @@ UI organization:
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **v-cam** (502 symbols, 515 relationships, 0 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **v-cam** (1047 symbols, 1678 relationships, 16 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -129,5 +129,10 @@ This project is indexed by GitNexus as **v-cam** (502 symbols, 515 relationships
 | Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
 | Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+| Work in the Camera area (31 symbols) | `.claude/skills/generated/camera/SKILL.md` |
+| Work in the Design_handoff_vcam area (31 symbols) | `.claude/skills/generated/design-handoff-vcam/SKILL.md` |
+| Work in the Settings area (18 symbols) | `.claude/skills/generated/settings/SKILL.md` |
+| Work in the Components area (12 symbols) | `.claude/skills/generated/components/SKILL.md` |
+| Work in the Preview area (8 symbols) | `.claude/skills/generated/preview/SKILL.md` |
 
 <!-- gitnexus:end -->
