@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
-import com.vcam.data.Filter
+import com.vcam.color.Filter
 import com.vcam.theme.VColors
 import com.vcam.theme.VType
 import com.vcam.ui.icons.VIcons
@@ -39,12 +39,12 @@ fun FilterNameLabel(
         )
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                filter.name,
+                filter.displayName,
                 style = VType.HeroDisplaySmall,
                 color = Color.White,
             )
             Text(
-                "${filter.category.uppercase()} · ${filter.code}",
+                "${filter.category.displayName.uppercase()} · ${filter.shortCode}",
                 style = VType.Mono,
                 color = VColors.White65,
             )

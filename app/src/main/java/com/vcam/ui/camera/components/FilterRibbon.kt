@@ -1,88 +1,92 @@
 package com.vcam.ui.camera.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.vcam.data.Filter
-import com.vcam.ui.components.photoBrush
-import com.vcam.ui.components.photoKindAt
+import com.vcam.VCamApplication
+import com.vcam.color.Filter
+import com.vcam.theme.VColors
+import com.vcam.theme.VType
 
 enum class RibbonVariant { Circle, Square, Pill }
 
 @Composable
 fun FilterRibbon(
     filters: List<Filter>,
-    activeIndex: Int,
+    activeId: String,
     accent: Color,
     variant: RibbonVariant,
-    onSelect: (Int) -> Unit,
+    onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val listState = rememberLazyListState()
-    LaunchedEffect(activeIndex) {
-        if (activeIndex in filters.indices) listState.animateScrollToItem(activeIndex)
-    }
-    val baseSize = if (variant == RibbonVariant.Pill) 52 else 44
-    val cornerDp = when (variant) {
-        RibbonVariant.Circle -> 22
-        RibbonVariant.Pill -> 12
-        RibbonVariant.Square -> 8
-    }
+    val app = LocalContext.current.applicationContext as VCamApplication
     LazyRow(
-        state = listState,
         modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
     ) {
-        itemsIndexed(filters, key = { _, f -> f.id }) { i, f ->
-            val active = i == activeIndex
-            Box(
-                Modifier
-                    .padding(end = 10.dp)
-                    .size((baseSize + 4).dp)
-                    .clickable { onSelect(i) },
-                contentAlignment = Alignment.Center,
-            ) {
+        items(filters, key = { it.id }) { filter ->
+            val active = filter.id == activeId
+            val shape = when (variant) {
+                RibbonVariant.Circle -> CircleShape
+                RibbonVariant.Pill -> RoundedCornerShape(12.dp)
+                RibbonVariant.Square -> RoundedCornerShape(8.dp)
+            }
+            val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, key1 = filter.id) {
+                value = app.thumbnailRenderer.thumbnailFor(filter)
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     Modifier
-                        .size(baseSize.dp)
-                        .graphicsLayer {
-                            scaleX = if (active) 1.12f else 1f
-                            scaleY = if (active) 1.12f else 1f
-                        }
-                        .clip(RoundedCornerShape(cornerDp.dp))
-                        .background(photoBrush(photoKindAt(i)))
+                        .size(56.dp)
+                        .clip(shape)
+                        .background(VColors.Ink12)
+                        .clickable { onSelect(filter.id) },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .background(Brush.linearGradient(listOf(f.tintTop, f.tintBottom)))
-                            .graphicsLayer { alpha = 0.85f }
-                    )
+                    bitmap?.let {
+                        Image(
+                            bitmap = it.asImageBitmap(),
+                            contentDescription = filter.displayName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    if (active) {
+                        Box(Modifier.fillMaxSize().border(2.dp, accent, shape))
+                    }
                 }
-                if (active) {
-                    Box(
-                        Modifier
-                            .size((baseSize + 4).dp)
-                            .border(2.dp, accent, RoundedCornerShape((cornerDp + 2).dp))
-                    )
-                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = filter.shortCode,
+                    style = VType.MonoLarge,
+                    color = if (active) accent else VColors.White65,
+                )
             }
         }
     }

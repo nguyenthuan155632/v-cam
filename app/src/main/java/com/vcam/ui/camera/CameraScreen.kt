@@ -54,7 +54,6 @@ import com.vcam.camera.LutRenderer
 import com.vcam.camera.CubeLut
 import com.vcam.camera.parseCubeLutFromAssets
 import com.vcam.color.FilterCatalog
-import com.vcam.data.Filters
 import com.vcam.theme.VColors
 import com.vcam.ui.camera.components.CameraBottomRow
 import com.vcam.ui.camera.components.CameraTopBar
@@ -103,10 +102,11 @@ fun CameraScreen(
     var exposureDragging by remember { mutableStateOf(false) }
     var activeLut by remember { mutableStateOf<CubeLut?>(null) }
 
-    val activeFilter = Filters.getOrElse(state.activeFilterIndex) { Filters.first() }
+    val activeFilter = FilterCatalog.byId(state.activeFilterId) ?: FilterCatalog.all.first()
+    val activeFilterIndex = FilterCatalog.all.indexOf(activeFilter)
 
     // Active filter → LUT swap.
-    LaunchedEffect(state.activeFilterIndex) {
+    LaunchedEffect(state.activeFilterId) {
         val lut = withContext(Dispatchers.IO) {
             parseCubeLutFromAssets(context, activeFilter.lutAsset)
         }
@@ -269,16 +269,20 @@ fun CameraScreen(
         ) {
             FilterNameLabel(
                 filter = activeFilter,
-                onPrev = { vm.setActiveFilter((state.activeFilterIndex - 1).coerceAtLeast(0)) },
-                onNext = { vm.setActiveFilter((state.activeFilterIndex + 1).coerceAtMost(Filters.size - 1)) },
+                onPrev = { vm.setActiveFilterId(FilterCatalog.all[(activeFilterIndex - 1).coerceAtLeast(0)].id) },
+                onNext = {
+                    vm.setActiveFilterId(
+                        FilterCatalog.all[(activeFilterIndex + 1).coerceAtMost(FilterCatalog.all.size - 1)].id,
+                    )
+                },
             )
             Spacer(Modifier.height(10.dp))
             FilterRibbon(
-                filters = Filters.take(12),
-                activeIndex = state.activeFilterIndex.coerceAtMost(11),
+                filters = FilterCatalog.all.take(12),
+                activeId = activeFilter.id,
                 accent = VColors.Coral,
                 variant = RibbonVariant.Circle,
-                onSelect = vm::setActiveFilter,
+                onSelect = vm::setActiveFilterId,
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(8.dp))
@@ -296,7 +300,7 @@ fun CameraScreen(
                     ShutterClassic {
                         val lut = activeLut ?: return@ShutterClassic
                         controllerRef.value?.capture(
-                            filter = FilterCatalog.byId(activeFilter.id) ?: return@ShutterClassic,
+                            filter = activeFilter,
                             lut = lut,
                             intensity = state.intensity / 100f,
                             saveOriginal = state.saveOriginal,

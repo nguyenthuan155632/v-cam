@@ -1,6 +1,7 @@
 package com.vcam.ui.camera
 
 import androidx.camera.core.ImageCapture
+import com.vcam.color.FilterCatalog
 import com.vcam.data.settings.AspectRatio
 
 enum class FlashSetting(val label: String, val cxFlash: Int) {
@@ -24,7 +25,7 @@ data class CameraUiState(
     val timer: TimerSetting = TimerSetting.Off,
     val aspectRatio: AspectRatio = AspectRatio.Ratio4x3,
     val gridOn: Boolean = true,
-    val activeFilterIndex: Int = 0,
+    val activeFilterId: String = FilterCatalog.all.first().id,
     val intensity: Int = 80,
     val saveOriginal: Boolean = true,
     val frontFacing: Boolean = false,

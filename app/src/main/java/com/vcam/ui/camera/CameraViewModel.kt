@@ -3,7 +3,7 @@ package com.vcam.ui.camera
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.vcam.data.Filters
+import com.vcam.color.FilterCatalog
 import com.vcam.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,10 +20,10 @@ class CameraViewModel(private val repo: SettingsRepository) : ViewModel() {
         viewModelScope.launch {
             repo.settings.collect { user ->
                 _state.update {
-                    val idx = Filters.indexOfFirst { f -> f.id == user.defaultFilterId }.coerceAtLeast(0)
+                    val resolvedId = FilterCatalog.byId(user.defaultFilterId)?.id ?: FilterCatalog.all.first().id
                     it.copy(
                         aspectRatio = user.defaultAspectRatio,
-                        activeFilterIndex = idx,
+                        activeFilterId = resolvedId,
                         intensity = user.defaultIntensity,
                         saveOriginal = user.saveOriginal,
                         gridOn = user.gridLines || it.gridOn,
@@ -45,8 +45,9 @@ class CameraViewModel(private val repo: SettingsRepository) : ViewModel() {
     }
     fun toggleGrid() = _state.update { it.copy(gridOn = !it.gridOn) }
     fun flipCamera() = _state.update { it.copy(frontFacing = !it.frontFacing) }
-    fun setActiveFilter(index: Int) = _state.update {
-        it.copy(activeFilterIndex = index.coerceIn(0, Filters.size - 1))
+    fun setActiveFilterId(id: String) = _state.update {
+        val resolvedId = FilterCatalog.byId(id)?.id ?: FilterCatalog.all.first().id
+        it.copy(activeFilterId = resolvedId)
     }
     fun setIntensity(v: Int) = _state.update { it.copy(intensity = v.coerceIn(0, 100)) }
     fun toggleIntensitySheet() = _state.update { it.copy(intensitySheetOpen = !it.intensitySheetOpen) }
