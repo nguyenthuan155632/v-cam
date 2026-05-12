@@ -46,6 +46,7 @@ android {
 
 val bakerCompiler by configurations.creating
 val bakerRuntime by configurations.creating
+val bakerTestRuntime by configurations.creating
 
 dependencies {
     implementation(libs.androidx.core.ktx)
@@ -79,11 +80,15 @@ dependencies {
 
     bakerCompiler("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.0.20")
     bakerRuntime("org.jetbrains.kotlin:kotlin-stdlib:2.0.20")
+    bakerTestRuntime("org.jetbrains.kotlin:kotlin-stdlib:2.0.20")
+    bakerTestRuntime(libs.junit)
 }
 
 // --- Procedural LUT baker (build-time only; not shipped in APK) ---
 val bakerClassesDir = layout.buildDirectory.dir("classes/kotlin/bakerMain")
+val bakerTestClassesDir = layout.buildDirectory.dir("classes/kotlin/bakerTest")
 val bakerSources = fileTree("src/bakerMain/kotlin") { include("**/*.kt") }
+val bakerTestSources = fileTree("src/bakerTest/kotlin") { include("**/*.kt") }
 
 val compileBakerMain by tasks.registering(JavaExec::class) {
     group = "vcam"
@@ -118,8 +123,33 @@ tasks.register<JavaExec>("bakeLuts") {
 
 tasks.named("preBuild") { dependsOn("bakeLuts") }
 
+val compileBakerTest by tasks.registering(JavaExec::class) {
+    group = "vcam"
+    description = "Compile build-time LUT baker tests."
+    dependsOn(compileBakerMain)
+    classpath = bakerCompiler
+    mainClass.set("org.jetbrains.kotlin.cli.jvm.K2JVMCompiler")
+    inputs.files(bakerTestSources)
+    inputs.files(bakerClassesDir)
+    inputs.files(bakerTestRuntime)
+    outputs.dir(bakerTestClassesDir)
+    doFirst {
+        args(
+            "-jvm-target", "17",
+            "-no-stdlib",
+            "-no-reflect",
+            "-classpath", (files(bakerClassesDir) + bakerTestRuntime).asPath,
+            "-d", bakerTestClassesDir.get().asFile.absolutePath,
+        )
+        args(bakerTestSources.files.map { it.absolutePath })
+    }
+}
+
 tasks.register<Test>("bakerUnitTest") {
     group = "verification"
     description = "Run JVM unit tests for the LUT baker."
+    dependsOn(compileBakerTest)
+    testClassesDirs = files(bakerTestClassesDir)
+    classpath = files(bakerTestClassesDir, bakerClassesDir) + bakerTestRuntime
     useJUnit()
 }
