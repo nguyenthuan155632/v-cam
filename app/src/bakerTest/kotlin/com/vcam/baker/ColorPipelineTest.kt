@@ -44,4 +44,57 @@ class ColorPipelineTest {
         val out = ColorPipeline.contrast(input, 2f)
         assertRgbEquals(Rgb(0.9f, 0.1f, 0.5f), out)
     }
+
+    @Test
+    fun liftGammaGainIdentity() {
+        val input = Rgb(0.4f, 0.5f, 0.6f)
+        val out = ColorPipeline.liftGammaGain(input, Rgb(0f, 0f, 0f), Rgb(1f, 1f, 1f), Rgb(1f, 1f, 1f))
+        assertRgbEquals(input, out)
+    }
+
+    @Test
+    fun gainScalesHighlights() {
+        val input = Rgb(0.4f, 0.5f, 0.6f)
+        val out = ColorPipeline.liftGammaGain(input, Rgb(0f, 0f, 0f), Rgb(1f, 1f, 1f), Rgb(2f, 1f, 1f))
+        assertEquals(0.8f, out.r, 1e-4f)
+    }
+
+    @Test
+    fun gammaAboveOneLightensMidtones() {
+        val input = Rgb(0.25f, 0.25f, 0.25f)
+        val out = ColorPipeline.liftGammaGain(input, Rgb(0f, 0f, 0f), Rgb(2f, 1f, 1f), Rgb(1f, 1f, 1f))
+        assertEquals(0.5f, out.r, 1e-4f)
+    }
+
+    @Test
+    fun gammaBelowOneDarkensMidtones() {
+        val input = Rgb(0.25f, 0.25f, 0.25f)
+        val out = ColorPipeline.liftGammaGain(input, Rgb(0f, 0f, 0f), Rgb(0.5f, 1f, 1f), Rgb(1f, 1f, 1f))
+        assertEquals(0.0625f, out.r, 1e-4f)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun gammaMustBePositive() {
+        ColorPipeline.liftGammaGain(Rgb(0.25f, 0.25f, 0.25f), Rgb(0f, 0f, 0f), Rgb(0f, 1f, 1f), Rgb(1f, 1f, 1f))
+    }
+
+    @Test
+    fun liftRaisesShadows() {
+        val input = Rgb(0f, 0f, 0f)
+        val out = ColorPipeline.liftGammaGain(input, Rgb(0.2f, 0f, 0f), Rgb(1f, 1f, 1f), Rgb(1f, 1f, 1f))
+        assertEquals(0.2f, out.r, 1e-4f)
+    }
+
+    @Test
+    fun channelMixerIdentity() {
+        val input = Rgb(0.3f, 0.6f, 0.9f)
+        assertRgbEquals(input, ColorPipeline.channelMix(input, ChannelMixer.identity()))
+    }
+
+    @Test
+    fun channelMixerSwapsRedAndBlue() {
+        val input = Rgb(0.2f, 0.5f, 0.8f)
+        val swap = ChannelMixer(0f, 0f, 1f, 0f, 1f, 0f, 1f, 0f, 0f)
+        assertRgbEquals(Rgb(0.8f, 0.5f, 0.2f), ColorPipeline.channelMix(input, swap))
+    }
 }
