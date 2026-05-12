@@ -5,6 +5,7 @@ import androidx.camera.core.AspectRatio
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.lifecycle.testing.TestLifecycleOwner
 import androidx.test.core.app.ApplicationProvider
+import com.vcam.color.OffscreenLutProcessor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -16,6 +17,12 @@ class CameraControllerTest {
     @Test
     fun imageCaptureJpegQualityIs100() {
         assertEquals(100, CameraController.imageCaptureJpegQuality)
+    }
+
+    @Test
+    fun outputFilenameUsesTimestampAndOriginalSuffix() {
+        assertEquals("VCam_1234567890.jpg", CameraController.outputFilename(1234567890L, isOriginal = false))
+        assertEquals("VCam_1234567890_orig.jpg", CameraController.outputFilename(1234567890L, isOriginal = true))
     }
 
     @Test
@@ -51,7 +58,7 @@ class CameraControllerTest {
     fun focusAndMeterAtReturnsFalseBeforeCameraIsBound() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val owner = TestLifecycleOwner()
-        val controller = CameraController(context, owner)
+        val controller = CameraController(context, owner, OffscreenLutProcessor())
 
         assertEquals(false, controller.focusAndMeterAt(10f, 10f, 100, 100))
 
@@ -69,7 +76,7 @@ class CameraControllerTest {
     fun exposureCompensationStateReturnsUnsupportedBeforeCameraIsBound() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val owner = TestLifecycleOwner()
-        val controller = CameraController(context, owner)
+        val controller = CameraController(context, owner, OffscreenLutProcessor())
 
         assertEquals(CameraController.ExposureCompensationState.Unsupported, controller.exposureCompensationState())
 
@@ -80,7 +87,7 @@ class CameraControllerTest {
     fun setExposureCompensationIndexReturnsFalseBeforeCameraIsBound() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val owner = TestLifecycleOwner()
-        val controller = CameraController(context, owner)
+        val controller = CameraController(context, owner, OffscreenLutProcessor())
 
         assertEquals(false, controller.setExposureCompensationIndex(1))
 

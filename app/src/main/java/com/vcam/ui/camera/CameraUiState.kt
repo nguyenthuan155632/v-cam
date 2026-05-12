@@ -26,6 +26,7 @@ data class CameraUiState(
     val gridOn: Boolean = true,
     val activeFilterIndex: Int = 0,
     val intensity: Int = 80,
+    val saveOriginal: Boolean = true,
     val frontFacing: Boolean = false,
     val intensitySheetOpen: Boolean = false,
 )

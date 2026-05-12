@@ -25,6 +25,7 @@ class CameraViewModel(private val repo: SettingsRepository) : ViewModel() {
                         aspectRatio = user.defaultAspectRatio,
                         activeFilterIndex = idx,
                         intensity = user.defaultIntensity,
+                        saveOriginal = user.saveOriginal,
                         gridOn = user.gridLines || it.gridOn,
                     )
                 }

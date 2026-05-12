@@ -2,6 +2,9 @@ package com.vcam.camera
 
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.graphics.SurfaceTexture
 import android.os.Build
 import android.provider.MediaStore
@@ -12,6 +15,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceOrientedMeteringPointFactory
 import androidx.camera.core.SurfaceRequest
@@ -21,6 +25,8 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.google.common.util.concurrent.ListenableFuture
+import com.vcam.color.Filter
+import com.vcam.color.OffscreenLutProcessor
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
@@ -32,6 +38,7 @@ import java.util.concurrent.Executors
 class CameraController(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner,
+    private val offscreenProcessor: OffscreenLutProcessor,
 ) {
     sealed interface ExposureCompensationState {
         data object Unsupported : ExposureCompensationState
@@ -56,6 +63,9 @@ class CameraController(
             width > 0 && height > 0 && x >= 0f && y >= 0f && x < width && y < height
 
         fun clampExposureIndex(index: Int, min: Int, max: Int): Int = index.coerceIn(min, max)
+
+        fun outputFilename(timestampMillis: Long, isOriginal: Boolean): String =
+            if (isOriginal) "VCam_${timestampMillis}_orig.jpg" else "VCam_$timestampMillis.jpg"
     }
 
     private val executor = Executors.newSingleThreadExecutor()
@@ -186,10 +196,51 @@ class CameraController(
         return true
     }
 
-    /** Capture a JPEG to MediaStore/Pictures/VCam. Returns the inserted Uri string. */
-    fun capture(onSaved: (String?) -> Unit) {
-        val capture = imageCapture ?: return onSaved(null)
-        val name = "VCam_${System.currentTimeMillis()}.jpg"
+    fun capture(
+        filter: Filter,
+        lut: CubeLut,
+        intensity: Float,
+        saveOriginal: Boolean,
+        onSaved: (filteredUri: String?, originalUri: String?) -> Unit,
+    ) {
+        val capture = imageCapture ?: return onSaved(null, null)
+        capture.takePicture(executor, object : ImageCapture.OnImageCapturedCallback() {
+            override fun onCaptureSuccess(image: ImageProxy) {
+                val rotation = image.imageInfo.rotationDegrees
+                val jpegBytes = image.planes[0].buffer.let { buffer ->
+                    ByteArray(buffer.remaining()).also { buffer.get(it) }
+                }
+                image.close()
+
+                val raw = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
+                    ?: return mainExecutor.execute { onSaved(null, null) }
+                val rotated = rotateBitmap(raw, rotation)
+
+                offscreenProcessor.process(rotated, lut, intensity) { filtered ->
+                    val ts = System.currentTimeMillis()
+                    val filteredBitmap = filtered ?: rotated
+                    val filteredUri = writeJpeg(filteredBitmap, outputFilename(ts, isOriginal = false))
+                    val originalUri = if (saveOriginal) writeJpeg(rotated, outputFilename(ts, isOriginal = true)) else null
+                    if (filtered != null && filtered !== rotated) filtered.recycle()
+                    rotated.recycle()
+                    mainExecutor.execute { onSaved(filteredUri, originalUri) }
+                }
+            }
+
+            override fun onError(exception: ImageCaptureException) {
+                mainExecutor.execute { onSaved(null, null) }
+            }
+        })
+    }
+
+    private fun rotateBitmap(bitmap: Bitmap, rotation: Int): Bitmap {
+        if (rotation == 0) return bitmap
+        val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            .also { if (it !== bitmap) bitmap.recycle() }
+    }
+
+    private fun writeJpeg(bitmap: Bitmap, name: String): String? {
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, name)
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
@@ -197,21 +248,14 @@ class CameraController(
                 put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/VCam")
             }
         }
-        val output = ImageCapture.OutputFileOptions.Builder(
-            context.contentResolver,
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            values,
-        ).build()
-
-        capture.takePicture(output, executor, object : ImageCapture.OnImageSavedCallback {
-            override fun onImageSaved(results: ImageCapture.OutputFileResults) {
-                mainExecutor.execute { onSaved(results.savedUri?.toString()) }
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+        return runCatching {
+            resolver.openOutputStream(uri)?.use { stream ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, imageCaptureJpegQuality, stream)
             }
-
-            override fun onError(exception: ImageCaptureException) {
-                mainExecutor.execute { onSaved(null) }
-            }
-        })
+            uri.toString()
+        }.getOrNull()
     }
 
     fun release() {

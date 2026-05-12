@@ -51,7 +51,9 @@ import com.vcam.VCamApplication
 import com.vcam.camera.CameraController
 import com.vcam.camera.CameraGLSurfaceView
 import com.vcam.camera.LutRenderer
+import com.vcam.camera.CubeLut
 import com.vcam.camera.parseCubeLutFromAssets
+import com.vcam.color.FilterCatalog
 import com.vcam.data.Filters
 import com.vcam.theme.VColors
 import com.vcam.ui.camera.components.CameraBottomRow
@@ -99,16 +101,17 @@ fun CameraScreen(
     var surfaceHeight by remember { mutableIntStateOf(0) }
     var focusControlState by remember { mutableStateOf<FocusControlState?>(null) }
     var exposureDragging by remember { mutableStateOf(false) }
+    var activeLut by remember { mutableStateOf<CubeLut?>(null) }
 
     val activeFilter = Filters.getOrElse(state.activeFilterIndex) { Filters.first() }
 
     // Active filter → LUT swap.
     LaunchedEffect(state.activeFilterIndex) {
-        val r = rendererRef.value ?: return@LaunchedEffect
         val lut = withContext(Dispatchers.IO) {
             parseCubeLutFromAssets(context, activeFilter.lutAsset)
         }
-        r.submitLut(lut)
+        activeLut = lut
+        rendererRef.value?.submitLut(lut)
     }
 
     // Intensity → renderer uniform.
@@ -191,11 +194,12 @@ fun CameraScreen(
                             }
                             val renderer = LutRenderer { surfaceTexture, w, h ->
                                 rendererRef.value = this.renderer
+                                activeLut?.let { this.renderer?.submitLut(it) }
                                 surfaceTextureRef.value = surfaceTexture
                                 surfaceWidth = if (w > 0) w else 1080
                                 surfaceHeight = if (h > 0) h else 1440
                                 this@apply.renderer?.updateSourceSize(surfaceWidth, surfaceHeight)
-                                val controller = CameraController(ctx, lifecycleOwner)
+                                val controller = CameraController(ctx, lifecycleOwner, app.offscreenLutProcessor)
                                     .also { controllerRef.value = it }
                                 controller.bindToSurfaceTexture(
                                     surfaceTexture,
@@ -290,8 +294,14 @@ fun CameraScreen(
                 onFlip = vm::flipCamera,
                 shutter = {
                     ShutterClassic {
-                        controllerRef.value?.capture { uri ->
-                            onPhotoCaptured(uri ?: "preview")
+                        val lut = activeLut ?: return@ShutterClassic
+                        controllerRef.value?.capture(
+                            filter = FilterCatalog.byId(activeFilter.id) ?: return@ShutterClassic,
+                            lut = lut,
+                            intensity = state.intensity / 100f,
+                            saveOriginal = state.saveOriginal,
+                        ) { filteredUri, _ ->
+                            onPhotoCaptured(filteredUri ?: "preview")
                         }
                     }
                 },
