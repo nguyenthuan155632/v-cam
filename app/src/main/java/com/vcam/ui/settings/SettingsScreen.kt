@@ -29,7 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vcam.VCamApplication
-import com.vcam.data.Filters
+import com.vcam.color.FilterCatalog
 import com.vcam.theme.VColors
 import com.vcam.theme.VType
 import com.vcam.ui.icons.VIcons
@@ -103,7 +103,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     label = "Default aspect ratio",
                     control = { ValueChev(state.defaultAspectRatio.label) },
                 )
-                val defaultFilterName = Filters.firstOrNull { it.id == state.defaultFilterId }?.name ?: "Crisp 01"
+                val defaultFilterName = FilterCatalog.byId(state.defaultFilterId)?.displayName ?: FilterCatalog.all.first().displayName
                 SettingsRow(
                     label = "Default filter",
                     control = { ValueChev(defaultFilterName) },
