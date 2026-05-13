@@ -25,8 +25,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vcam.VCamApplication
-import com.vcam.data.Categories
-import com.vcam.data.filtersInCategory
+import com.vcam.color.FilterCatalog
+import com.vcam.color.FilterCategory
 import com.vcam.theme.VColors
 import com.vcam.theme.VType
 import com.vcam.ui.components.IntensitySlider
@@ -41,8 +41,9 @@ fun FilterBrowserScreen(onBack: () -> Unit) {
     val app = context.applicationContext as VCamApplication
     val vm: FilterBrowserViewModel = viewModel(factory = FilterBrowserViewModel.Factory(app.settingsRepo))
     val state by vm.state.collectAsState()
-    val filters = filtersInCategory(state.activeCategory)
-    val activeFilter = filters.getOrElse(state.activeFilterIndexInCat) { filters.firstOrNull() }
+    val filters = FilterCatalog.byCategory(state.activeCategory)
+    val activeFilter = FilterCatalog.byId(state.activeFilterId)?.takeIf { it.category == state.activeCategory }
+        ?: filters.first()
 
     Column(
         Modifier
@@ -50,7 +51,6 @@ fun FilterBrowserScreen(onBack: () -> Unit) {
             .background(VColors.Paper)
             .statusBarsPadding()
     ) {
-        // Header
         Row(
             Modifier
                 .fillMaxWidth()
@@ -72,20 +72,16 @@ fun FilterBrowserScreen(onBack: () -> Unit) {
         }
 
         CategoryPills(
-            categories = Categories,
+            categories = FilterCategory.entries,
             active = state.activeCategory,
             onSelect = vm::setCategory,
         )
         Spacer(Modifier.height(12.dp))
 
-        // Hero
-        if (activeFilter != null) {
-            Box(Modifier.padding(horizontal = 14.dp)) {
-                HeroPreview(filter = activeFilter, intensity = state.intensity)
-            }
+        Box(Modifier.padding(horizontal = 14.dp)) {
+            HeroPreview(filter = activeFilter, intensity = state.intensity)
         }
 
-        // Intensity slider
         Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -103,12 +99,11 @@ fun FilterBrowserScreen(onBack: () -> Unit) {
             )
         }
 
-        // Grid
         FilterGrid(
             filters = filters,
-            activeIndex = state.activeFilterIndexInCat,
+            activeId = activeFilter.id,
             accent = VColors.Coral,
-            onSelect = vm::setActiveFilterInCat,
+            onSelect = vm::setActiveFilterId,
             modifier = Modifier
                 .fillMaxWidth()
                 .systemBarsPadding(),

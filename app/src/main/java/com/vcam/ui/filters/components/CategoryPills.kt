@@ -14,32 +14,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.vcam.color.FilterCategory
 import com.vcam.theme.VColors
 import com.vcam.theme.VType
 
 @Composable
 fun CategoryPills(
-    categories: List<String>,
-    active: String,
-    onSelect: (String) -> Unit,
+    categories: List<FilterCategory>,
+    active: FilterCategory,
+    onSelect: (FilterCategory) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyRow(
         modifier = modifier,
         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
     ) {
-        items(categories) { c ->
-            val isActive = c == active
+        items(categories, key = { it.name }) { category ->
+            val isActive = category == active
             Box(
                 Modifier
                     .padding(end = 8.dp)
                     .clip(RoundedCornerShape(999.dp))
                     .background(if (isActive) VColors.Ink else VColors.Ink06)
-                    .clickable { onSelect(c) }
+                    .clickable { onSelect(category) }
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
-                    c,
+                    category.displayName,
                     style = VType.SecondarySmall.copy(
                         fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
                     ),
