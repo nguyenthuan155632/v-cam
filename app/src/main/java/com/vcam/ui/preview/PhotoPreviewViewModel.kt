@@ -48,8 +48,10 @@ class PhotoPreviewViewModel(
         if (repo != null) {
             viewModelScope.launch {
                 repo.settings.collect { user ->
-                    val resolvedId = FilterCatalog.byId(user.defaultFilterId)?.id ?: FilterCatalog.all.first().id
-                    _state.update { it.copy(activeFilterId = resolvedId, intensity = user.defaultIntensity) }
+                    val filter = FilterCatalog.byId(user.defaultFilterId)
+                    val resolvedId = filter?.id ?: FilterCatalog.all.first().id
+                    val defaultIntensity = filter?.defaultIntensity ?: FilterCatalog.all.first().defaultIntensity
+                    _state.update { it.copy(activeFilterId = resolvedId, intensity = (defaultIntensity * 100).toInt()) }
                     renderActiveFilter()
                 }
             }
@@ -137,8 +139,9 @@ class PhotoPreviewViewModel(
     }
 
     fun setFilterId(id: String) = _state.update {
-        val resolvedId = FilterCatalog.byId(id)?.id ?: FilterCatalog.all.first().id
-        it.copy(activeFilterId = resolvedId)
+        val filter = FilterCatalog.byId(id)
+        val resolvedId = filter?.id ?: FilterCatalog.all.first().id
+        it.copy(activeFilterId = resolvedId, intensity = ((filter?.defaultIntensity ?: 1f) * 100).toInt())
     }.also { renderActiveFilter() }
 
     fun setIntensity(v: Int) = _state.update { it.copy(intensity = v.coerceIn(0, 100)) }

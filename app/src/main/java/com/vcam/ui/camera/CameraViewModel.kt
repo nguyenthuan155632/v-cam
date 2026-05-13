@@ -19,12 +19,14 @@ class CameraViewModel(private val repo: SettingsRepository) : ViewModel() {
     init {
         viewModelScope.launch {
             repo.settings.collect { user ->
+                val filter = FilterCatalog.byId(user.defaultFilterId)
+                val resolvedId = filter?.id ?: FilterCatalog.all.first().id
+                val defaultIntensity = filter?.defaultIntensity ?: FilterCatalog.all.first().defaultIntensity
                 _state.update {
-                    val resolvedId = FilterCatalog.byId(user.defaultFilterId)?.id ?: FilterCatalog.all.first().id
                     it.copy(
                         aspectRatio = user.defaultAspectRatio,
                         activeFilterId = resolvedId,
-                        intensity = user.defaultIntensity,
+                        intensity = (defaultIntensity * 100).toInt(),
                         saveOriginal = user.saveOriginal,
                         gridOn = user.gridLines || it.gridOn,
                     )
@@ -46,8 +48,9 @@ class CameraViewModel(private val repo: SettingsRepository) : ViewModel() {
     fun toggleGrid() = _state.update { it.copy(gridOn = !it.gridOn) }
     fun flipCamera() = _state.update { it.copy(frontFacing = !it.frontFacing) }
     fun setActiveFilterId(id: String) = _state.update {
-        val resolvedId = FilterCatalog.byId(id)?.id ?: FilterCatalog.all.first().id
-        it.copy(activeFilterId = resolvedId)
+        val filter = FilterCatalog.byId(id)
+        val resolvedId = filter?.id ?: FilterCatalog.all.first().id
+        it.copy(activeFilterId = resolvedId, intensity = ((filter?.defaultIntensity ?: 1f) * 100).toInt())
     }
     fun setIntensity(v: Int) = _state.update { it.copy(intensity = v.coerceIn(0, 100)) }
     fun toggleIntensitySheet() = _state.update { it.copy(intensitySheetOpen = !it.intensitySheetOpen) }
