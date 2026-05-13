@@ -11,10 +11,38 @@ class ColorPipelineTest {
         assertEquals("b", expected.b, actual.b, eps)
     }
 
+    // ─── sRGB ↔ Linear ─────────────────────────────────────────────
+
+    @Test
+    fun srgbToLinearRoundtrip() {
+        val values = floatArrayOf(0f, 0.1f, 0.5f, 0.75f, 1f)
+        for (v in values) {
+            val lin = ColorPipeline.srgbToLinearRgb(Rgb(v, v, v))
+            val back = ColorPipeline.linearToSrgbRgb(lin)
+            assertRgbEquals(Rgb(v, v, v), back, eps = 1e-3f)
+        }
+    }
+
+    @Test
+    fun srgbToLinearDarkensMidtones() {
+        val mid = ColorPipeline.srgbToLinearRgb(Rgb(0.5f, 0.5f, 0.5f))
+        assertEquals(true, mid.r < 0.5f)
+    }
+
+    // ─── White Balance (multiplicative) ────────────────────────────
+
     @Test
     fun whiteBalanceZeroShiftIsIdentity() {
         val input = Rgb(0.4f, 0.5f, 0.6f)
         assertRgbEquals(input, ColorPipeline.whiteBalance(input, WhiteBalance(0f, 0f)))
+    }
+
+    @Test
+    fun whiteBalanceZeroShiftPreservesNeutrals() {
+        val gray = Rgb(0.5f, 0.5f, 0.5f)
+        val out = ColorPipeline.whiteBalance(gray, WhiteBalance(tempShift = 0f, tintShift = 0f))
+        assertEquals(out.r, out.g, 1e-4f)
+        assertEquals(out.g, out.b, 1e-4f)
     }
 
     @Test
@@ -25,25 +53,7 @@ class ColorPipelineTest {
         assertEquals(true, out.b < input.b)
     }
 
-    @Test
-    fun brightnessAdditive() {
-        val input = Rgb(0.4f, 0.5f, 0.6f)
-        val out = ColorPipeline.brightness(input, 0.1f)
-        assertRgbEquals(Rgb(0.5f, 0.6f, 0.7f), out)
-    }
-
-    @Test
-    fun contrastIdentityAtPivot() {
-        val input = Rgb(0.5f, 0.5f, 0.5f)
-        assertRgbEquals(input, ColorPipeline.contrast(input, 1.5f))
-    }
-
-    @Test
-    fun contrastExpandsAroundPivot() {
-        val input = Rgb(0.7f, 0.3f, 0.5f)
-        val out = ColorPipeline.contrast(input, 2f)
-        assertRgbEquals(Rgb(0.9f, 0.1f, 0.5f), out)
-    }
+    // ─── Lift / Gamma / Gain ───────────────────────────────────────
 
     @Test
     fun liftGammaGainIdentity() {
@@ -85,6 +95,54 @@ class ColorPipelineTest {
         assertEquals(0.2f, out.r, 1e-4f)
     }
 
+    // ─── Brightness ─────────────────────────────────────────────────
+
+    @Test
+    fun brightnessAdditive() {
+        val input = Rgb(0.4f, 0.5f, 0.6f)
+        val out = ColorPipeline.brightness(input, 0.1f)
+        assertRgbEquals(Rgb(0.5f, 0.6f, 0.7f), out)
+    }
+
+    // ─── Contrast (smooth S-curve) ──────────────────────────────────
+
+    @Test
+    fun contrastIdentityAtOne() {
+        val input = Rgb(0.2f, 0.5f, 0.8f)
+        val out = ColorPipeline.contrast(input, 1f)
+        assertRgbEquals(input, out, eps = 1e-3f)
+    }
+
+    @Test
+    fun contrastMonotonic() {
+        val values = floatArrayOf(0f, 0.1f, 0.3f, 0.5f, 0.7f, 0.9f, 1f)
+        var prev = -1f
+        for (v in values) {
+            val out = ColorPipeline.contrast(Rgb(v, v, v), 1.3f).r
+            assertEquals(true, out >= prev)
+            prev = out
+        }
+    }
+
+    @Test
+    fun contrastOutputIn01() {
+        val values = floatArrayOf(0f, 0.25f, 0.5f, 0.75f, 1f)
+        for (v in values) {
+            val out = ColorPipeline.contrast(Rgb(v, v, v), 1.5f).r
+            assertEquals(true, out >= 0f && out <= 1f)
+        }
+    }
+
+    @Test
+    fun contrastMoreContrastiveExpandsMidtones() {
+        val low = ColorPipeline.contrast(Rgb(0.3f, 0.3f, 0.3f), 1.5f).r
+        val high = ColorPipeline.contrast(Rgb(0.7f, 0.7f, 0.7f), 1.5f).r
+        assertEquals(true, low < 0.3f)
+        assertEquals(true, high > 0.7f)
+    }
+
+    // ─── Channel Mixer ──────────────────────────────────────────────
+
     @Test
     fun channelMixerIdentity() {
         val input = Rgb(0.3f, 0.6f, 0.9f)
@@ -98,6 +156,8 @@ class ColorPipelineTest {
         assertRgbEquals(Rgb(0.8f, 0.5f, 0.2f), ColorPipeline.channelMix(input, swap))
     }
 
+    // ─── Luma ───────────────────────────────────────────────────────
+
     @Test
     fun lumaRec601Coefficients() {
         assertEquals(0.299f, ColorPipeline.luma(Rgb(1f, 0f, 0f)), 1e-4f)
@@ -105,24 +165,57 @@ class ColorPipelineTest {
         assertEquals(0.114f, ColorPipeline.luma(Rgb(0f, 0f, 1f)), 1e-4f)
     }
 
+    // ─── Vibrance ───────────────────────────────────────────────────
+
     @Test
-    fun saturationOneIsIdentity() {
+    fun vibranceOneIsIdentity() {
         val input = Rgb(0.7f, 0.3f, 0.1f)
-        assertRgbEquals(input, ColorPipeline.saturate(input, 1f))
+        assertRgbEquals(input, ColorPipeline.vibrance(input, 1f), eps = 1e-4f)
     }
 
     @Test
-    fun saturationZeroProducesGrayscale() {
-        val input = Rgb(0.7f, 0.3f, 0.1f)
-        val out = ColorPipeline.saturate(input, 0f)
-        val l = ColorPipeline.luma(input)
-        assertRgbEquals(Rgb(l, l, l), out)
+    fun vibranceZeroStronglyDesaturates() {
+        val input = Rgb(0.8f, 0.2f, 0.1f)
+        val out = ColorPipeline.vibrance(input, 0f)
+        val outLuma = ColorPipeline.luma(out)
+        // At vibrance=0, the result should be much closer to grayscale than the input
+        val inputChroma = maxOf(input.r, input.g, input.b) - minOf(input.r, input.g, input.b)
+        val outChroma = maxOf(out.r, out.g, out.b) - minOf(out.r, out.g, out.b)
+        assertEquals(true, outChroma < inputChroma * 0.5f)
     }
+
+    @Test
+    fun vibranceProtectsSkinTones() {
+        val skin = Rgb(0.7f, 0.55f, 0.45f)
+        val saturated = ColorPipeline.vibrance(skin, 1.5f)
+        val globalSat = lerp(skin, Rgb(ColorPipeline.luma(skin), ColorPipeline.luma(skin), ColorPipeline.luma(skin)), 1.5f)
+        val satChange = colorDistance(skin, saturated)
+        val globalChange = colorDistance(skin, globalSat)
+        assertEquals(true, satChange < globalChange)
+    }
+
+    // ─── Hue Rotation ───────────────────────────────────────────────
+
+    @Test
+    fun hueRotationRoundtrip() {
+        val input = Rgb(0.7f, 0.3f, 0.1f)
+        val rotated = ColorPipeline.rotateHue(input, 30f)
+        val back = ColorPipeline.rotateHue(rotated, -30f)
+        assertRgbEquals(input, back, eps = 1e-3f)
+    }
+
+    @Test
+    fun hueRotationZeroIsIdentity() {
+        val input = Rgb(0.7f, 0.3f, 0.1f)
+        assertRgbEquals(input, ColorPipeline.rotateHue(input, 0f))
+    }
+
+    // ─── Tone Curve ─────────────────────────────────────────────────
 
     @Test
     fun toneCurveLinearIsIdentity() {
         val input = Rgb(0.2f, 0.5f, 0.8f)
-        assertRgbEquals(input, ColorPipeline.applyToneCurve(input, ToneCurve.linear()))
+        assertRgbEquals(input, ColorPipeline.applyToneCurve(input, ToneCurve.linear()), eps = 1e-4f)
     }
 
     @Test
@@ -134,10 +227,19 @@ class ColorPipelineTest {
         assertEquals(0.82f, highlight.r, 1e-3f)
     }
 
+    @Test
+    fun toneCurveCatmullRomIsSmooth() {
+        val curve = ToneCurve(listOf(0f to 0f, 0.5f to 0.6f, 1f to 1f))
+        val mid = ColorPipeline.applyToneCurve(Rgb(0.5f, 0.5f, 0.5f), curve)
+        assertEquals(0.6f, mid.r, 1e-4f)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun toneCurveRejectsDuplicateXValues() {
         ToneCurve(listOf(0f to 0f, 0.5f to 0.4f, 0.5f to 0.6f, 1f to 1f))
     }
+
+    // ─── Split Toning ───────────────────────────────────────────────
 
     @Test
     fun splitToningNullIsIdentity() {
@@ -158,10 +260,13 @@ class ColorPipelineTest {
         assertEquals(true, highlight.r > 0.9f - 1e-3f && highlight.b < 0.9f)
     }
 
+    // ─── Pipeline Orchestration ─────────────────────────────────────
+
     @Test
     fun applyDefaultParamsIsIdentity() {
         val input = Rgb(0.4f, 0.5f, 0.6f)
-        assertRgbEquals(input, ColorPipeline.apply(input, FilterParams()))
+        val out = ColorPipeline.apply(input, FilterParams())
+        assertRgbEquals(input, out, eps = 1e-3f)
     }
 
     @Test
@@ -181,7 +286,7 @@ class ColorPipelineTest {
     }
 
     @Test
-    fun applyOrderMatches_WB_then_LGG_then_brightness_then_contrast_then_mixer_then_sat_then_tone() {
+    fun applyOrderMatchesExpected() {
         val input = Rgb(0.25f, 0.5f, 0.75f)
         val params = FilterParams(
             whiteBalance = WhiteBalance(tempShift = 0.1f, tintShift = -0.1f),
@@ -194,17 +299,30 @@ class ColorPipelineTest {
             saturation = 0.8f,
             splitToning = SplitToning(Rgb(0f, 0f, 1f), Rgb(1f, 0.8f, 0f), balance = 0.6f),
             toneCurve = ToneCurve(listOf(0f to 0f, 0.5f to 0.45f, 1f to 1f)),
+            hueShiftDegrees = 10f,
         )
-        var expected = input
-        expected = ColorPipeline.whiteBalance(expected, params.whiteBalance)
-        expected = ColorPipeline.liftGammaGain(expected, params.lift, params.gamma, params.gain)
-        expected = ColorPipeline.brightness(expected, params.brightness)
-        expected = ColorPipeline.contrast(expected, params.contrast)
-        expected = ColorPipeline.channelMix(expected, params.channelMixer)
-        expected = ColorPipeline.saturate(expected, params.saturation)
-        expected = ColorPipeline.applySplitToning(expected, params.splitToning)
-        expected = ColorPipeline.applyToneCurve(expected, params.toneCurve)
-        expected = Rgb(expected.r.coerceIn(0f, 1f), expected.g.coerceIn(0f, 1f), expected.b.coerceIn(0f, 1f))
-        assertRgbEquals(expected, ColorPipeline.apply(input, params))
+        var expected = ColorPipeline.srgbToLinearRgb(input)
+        expected = ColorPipeline.whiteBalance(expected, params.whiteBalance).clamp()
+        expected = ColorPipeline.liftGammaGain(expected, params.lift, params.gamma, params.gain).clamp()
+        expected = ColorPipeline.brightness(expected, params.brightness).clamp()
+        expected = ColorPipeline.contrast(expected, params.contrast).clamp()
+        expected = ColorPipeline.channelMix(expected, params.channelMixer).clamp()
+        expected = ColorPipeline.vibrance(expected, params.saturation).clamp()
+        expected = ColorPipeline.rotateHue(expected, params.hueShiftDegrees).clamp()
+        expected = ColorPipeline.applySplitToning(expected, params.splitToning).clamp()
+        expected = ColorPipeline.applyToneCurve(expected, params.toneCurve).clamp()
+        expected = ColorPipeline.linearToSrgbRgb(expected).clamp()
+        assertRgbEquals(expected, ColorPipeline.apply(input, params), eps = 1e-4f)
     }
+
+    // Helpers
+    private fun lerp(a: Rgb, b: Rgb, t: Float): Rgb {
+        val ct = t.coerceIn(0f, 1f)
+        return Rgb(a.r + (b.r - a.r) * ct, a.g + (b.g - a.g) * ct, a.b + (b.b - a.b) * ct)
+    }
+
+    private fun colorDistance(a: Rgb, b: Rgb): Float =
+        kotlin.math.sqrt((a.r - b.r) * (a.r - b.r) + (a.g - b.g) * (a.g - b.g) + (a.b - b.b) * (a.b - b.b))
+
+    private fun Rgb.clamp() = Rgb(r.coerceIn(0f, 1f), g.coerceIn(0f, 1f), b.coerceIn(0f, 1f))
 }
