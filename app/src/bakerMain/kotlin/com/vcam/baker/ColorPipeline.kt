@@ -1,5 +1,7 @@
 package com.vcam.baker
 
+import kotlin.math.abs
+
 object ColorPipeline {
 
     // ─── sRGB ↔ Linear ─────────────────────────────────────────────
@@ -54,7 +56,7 @@ object ColorPipeline {
     // ─── Contrast (smooth S-curve with toe and shoulder) ───────────
 
     fun contrast(c: Rgb, amount: Float): Rgb {
-        if (kotlin.math.abs(amount - 1f) < 1e-4f) return c
+        if (abs(amount - 1f) < 1e-4f) return c
         fun f(v: Float): Float {
             val toe = 0.02f * (amount - 1f).coerceAtLeast(-1f)
             val shoulder = 0.98f - 0.02f * (amount - 1f).coerceAtMost(1f)
@@ -84,8 +86,8 @@ object ColorPipeline {
     fun vibrance(c: Rgb, amount: Float): Rgb {
         val l = luma(c)
         val maxChroma = maxOf(c.r, c.g, c.b) - minOf(c.r, c.g, c.b)
-        val skinProximity = 1f - (kotlin.math.abs(c.r - c.g) + kotlin.math.abs(c.r - c.b)).coerceIn(0f, 1f)
-        val skinMask = (1f - kotlin.math.abs(l - 0.5f) * 2f).coerceIn(0f, 1f) * skinProximity
+        val skinProximity = 1f - (abs(c.r - c.g) + abs(c.r - c.b)).coerceIn(0f, 1f)
+        val skinMask = (1f - abs(l - 0.5f) * 2f).coerceIn(0f, 1f) * skinProximity
         val saturationMask = maxChroma.coerceIn(0f, 1f)
         val weight = (saturationMask * (1f - skinMask * 0.6f)).coerceIn(0f, 1f)
         val boost = 1f + (amount - 1f) * weight
@@ -99,7 +101,7 @@ object ColorPipeline {
     // ─── Hue Rotation ───────────────────────────────────────────────
 
     fun rotateHue(c: Rgb, degrees: Float): Rgb {
-        if (kotlin.math.abs(degrees) < 0.01f) return c
+        if (abs(degrees) < 0.01f) return c
         val (h, s, v) = rgbToHsv(c)
         var newH = (h + degrees / 360f) % 1f
         if (newH < 0f) newH += 1f
@@ -155,13 +157,13 @@ object ColorPipeline {
     // ─── Tone Curve (Catmull-Rom interpolation) ─────────────────────
 
     fun applyToneCurve(c: Rgb, curve: ToneCurve): Rgb {
-        val isIdentity = curve.points.all { (x, y) -> kotlin.math.abs(x - y) < 1e-4f }
+        val isIdentity = curve.points.all { (x, y) -> abs(x - y) < 1e-4f }
         if (isIdentity) return c
         return Rgb(curveLookup(c.r, curve), curveLookup(c.g, curve), curveLookup(c.b, curve))
     }
 
     private fun curveLookup(v: Float, curve: ToneCurve): Float {
-        val pts = curve.points.sortedBy { it.first }
+        val pts = curve.sortedPoints
         if (v <= pts.first().first) return pts.first().second
         if (v >= pts.last().first) return pts.last().second
         for (i in 0 until pts.size - 1) {

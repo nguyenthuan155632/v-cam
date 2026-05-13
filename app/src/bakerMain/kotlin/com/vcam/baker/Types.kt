@@ -25,6 +25,8 @@ data class ToneCurve(val points: List<Pair<Float, Float>>) {
         }
     }
 
+    val sortedPoints: List<Pair<Float, Float>> = points.sortedBy { it.first }
+
     companion object {
         fun linear() = ToneCurve(listOf(0f to 0f, 1f to 1f))
     }
