@@ -1,6 +1,8 @@
 package com.vcam.baker
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ColorPipelineTest {
@@ -26,7 +28,7 @@ class ColorPipelineTest {
     @Test
     fun srgbToLinearDarkensMidtones() {
         val mid = ColorPipeline.srgbToLinearRgb(Rgb(0.5f, 0.5f, 0.5f))
-        assertEquals(true, mid.r < 0.5f)
+        assertTrue(mid.r < 0.5f)
     }
 
     // ─── White Balance (multiplicative) ────────────────────────────
@@ -49,8 +51,8 @@ class ColorPipelineTest {
     fun whiteBalancePositiveTempWarmsImage() {
         val input = Rgb(0.5f, 0.5f, 0.5f)
         val out = ColorPipeline.whiteBalance(input, WhiteBalance(tempShift = 0.2f, tintShift = 0f))
-        assertEquals(true, out.r > input.r)
-        assertEquals(true, out.b < input.b)
+        assertTrue(out.r > input.r)
+        assertTrue(out.b < input.b)
     }
 
     // ─── Lift / Gamma / Gain ───────────────────────────────────────
@@ -119,7 +121,7 @@ class ColorPipelineTest {
         var prev = -1f
         for (v in values) {
             val out = ColorPipeline.contrast(Rgb(v, v, v), 1.3f).r
-            assertEquals(true, out >= prev)
+            assertTrue(out >= prev)
             prev = out
         }
     }
@@ -129,7 +131,7 @@ class ColorPipelineTest {
         val values = floatArrayOf(0f, 0.25f, 0.5f, 0.75f, 1f)
         for (v in values) {
             val out = ColorPipeline.contrast(Rgb(v, v, v), 1.5f).r
-            assertEquals(true, out >= 0f && out <= 1f)
+            assertTrue(out >= 0f && out <= 1f)
         }
     }
 
@@ -137,8 +139,8 @@ class ColorPipelineTest {
     fun contrastMoreContrastiveExpandsMidtones() {
         val low = ColorPipeline.contrast(Rgb(0.3f, 0.3f, 0.3f), 1.5f).r
         val high = ColorPipeline.contrast(Rgb(0.7f, 0.7f, 0.7f), 1.5f).r
-        assertEquals(true, low < 0.3f)
-        assertEquals(true, high > 0.7f)
+        assertTrue(low < 0.3f)
+        assertTrue(high > 0.7f)
     }
 
     // ─── Channel Mixer ──────────────────────────────────────────────
@@ -181,17 +183,17 @@ class ColorPipelineTest {
         // At vibrance=0, the result should be much closer to grayscale than the input
         val inputChroma = maxOf(input.r, input.g, input.b) - minOf(input.r, input.g, input.b)
         val outChroma = maxOf(out.r, out.g, out.b) - minOf(out.r, out.g, out.b)
-        assertEquals(true, outChroma < inputChroma * 0.5f)
+        assertTrue(outChroma < inputChroma * 0.5f)
     }
 
     @Test
     fun vibranceProtectsSkinTones() {
         val skin = Rgb(0.7f, 0.55f, 0.45f)
-        val saturated = ColorPipeline.vibrance(skin, 1.5f)
-        val globalSat = lerp(skin, Rgb(ColorPipeline.luma(skin), ColorPipeline.luma(skin), ColorPipeline.luma(skin)), 1.5f)
-        val satChange = colorDistance(skin, saturated)
+        val vibranced = ColorPipeline.vibrance(skin, 1.5f)
+        val globalSat = saturate(skin, 1.5f)
+        val satChange = colorDistance(skin, vibranced)
         val globalChange = colorDistance(skin, globalSat)
-        assertEquals(true, satChange < globalChange)
+        assertTrue("vibrance should change skin less than global saturation", satChange < globalChange)
     }
 
     // ─── Hue Rotation ───────────────────────────────────────────────
@@ -256,8 +258,8 @@ class ColorPipelineTest {
         )
         val shadow = ColorPipeline.applySplitToning(Rgb(0.1f, 0.1f, 0.1f), st)
         val highlight = ColorPipeline.applySplitToning(Rgb(0.9f, 0.9f, 0.9f), st)
-        assertEquals(true, shadow.b > 0.1f)
-        assertEquals(true, highlight.r > 0.9f - 1e-3f && highlight.b < 0.9f)
+        assertTrue(shadow.b > 0.1f)
+        assertTrue(highlight.r > 0.9f - 1e-3f && highlight.b < 0.9f)
     }
 
     // ─── Pipeline Orchestration ─────────────────────────────────────
@@ -323,6 +325,11 @@ class ColorPipelineTest {
 
     private fun colorDistance(a: Rgb, b: Rgb): Float =
         kotlin.math.sqrt((a.r - b.r) * (a.r - b.r) + (a.g - b.g) * (a.g - b.g) + (a.b - b.b) * (a.b - b.b))
+
+    private fun saturate(c: Rgb, amount: Float): Rgb {
+        val l = ColorPipeline.luma(c)
+        return Rgb(l + (c.r - l) * amount, l + (c.g - l) * amount, l + (c.b - l) * amount)
+    }
 
     private fun Rgb.clamp() = Rgb(r.coerceIn(0f, 1f), g.coerceIn(0f, 1f), b.coerceIn(0f, 1f))
 }
