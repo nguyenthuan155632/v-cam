@@ -19,7 +19,7 @@ class ThumbnailRenderer(
     suspend fun thumbnailFor(filter: Filter): Bitmap = withContext(Dispatchers.Default) {
         cache[filter.id]?.let { return@withContext it }
         val lut = lutCache.loadForFilter(context, filter)
-        val out = applyLutCpuTrilinear(referenceImage, lut, intensity = 1f)
+        val out = applyLutCpuTrilinear(referenceImage, lut, intensity = filter.defaultIntensity)
         cache.put(filter.id, out)
         out
     }
