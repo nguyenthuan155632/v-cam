@@ -1,5 +1,6 @@
 package com.vcam.ui.preview
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,37 +18,34 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vcam.VCamApplication
-import com.vcam.data.Filters
+import com.vcam.color.Filter
+import com.vcam.color.FilterCatalog
 import com.vcam.theme.VColors
 import com.vcam.theme.VType
 import com.vcam.ui.components.IntensitySlider
-import com.vcam.ui.components.PhotoKind
-import com.vcam.ui.components.photoBrush
-import com.vcam.ui.components.photoKindAt
 import com.vcam.ui.icons.VIcons
 
 object PhotoPreviewActions {
@@ -64,10 +62,10 @@ fun PhotoPreviewScreen(
     val context = LocalContext.current
     val app = context.applicationContext as VCamApplication
     val vm: PhotoPreviewViewModel = viewModel(
-        factory = PhotoPreviewViewModel.Factory(context, app.settingsRepo)
+        factory = PhotoPreviewViewModel.Factory(context, app.settingsRepo, app.offscreenLutProcessor)
     )
     val state by vm.state.collectAsState()
-    val activeFilter = Filters.getOrElse(state.activeFilterIndex) { Filters.first() }
+    val activeFilter = FilterCatalog.byId(state.activeFilterId) ?: FilterCatalog.all.first()
 
     LaunchedEffect(photoId) { vm.loadPhoto(photoId) }
 
@@ -77,7 +75,6 @@ fun PhotoPreviewScreen(
             .background(VColors.Paper)
             .statusBarsPadding()
     ) {
-        // Top bar
         Row(
             Modifier
                 .fillMaxWidth()
@@ -103,7 +100,6 @@ fun PhotoPreviewScreen(
             }
         }
 
-        // Photo (4:3) — render captured bitmap when available, fall back to gradient.
         Box(
             Modifier
                 .padding(horizontal = 14.dp, vertical = 6.dp)
@@ -111,7 +107,7 @@ fun PhotoPreviewScreen(
                 .aspectRatio(4f / 3f)
                 .shadow(4.dp, RoundedCornerShape(16.dp))
                 .clip(RoundedCornerShape(16.dp))
-                .background(photoBrush(PhotoKind.Pancakes))
+                .background(VColors.Ink12)
         ) {
             val bmp = state.bitmap
             if (bmp != null) {
@@ -121,14 +117,15 @@ fun PhotoPreviewScreen(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
+            } else {
+                FilterThumbnail(activeFilter, Modifier.fillMaxSize())
             }
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(Brush.linearGradient(listOf(activeFilter.tintTop, activeFilter.tintBottom)))
-                    .graphicsLayer { alpha = state.intensity / 100f }
+                    .background(Color.Black)
+                    .graphicsLayer { alpha = (100 - state.intensity).coerceIn(0, 100) / 300f }
             )
-            // Code + intensity pill, top-left
             Box(
                 Modifier
                     .padding(12.dp)
@@ -137,14 +134,13 @@ fun PhotoPreviewScreen(
                     .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
                 Text(
-                    "${activeFilter.code} · ${state.intensity}%",
+                    "${activeFilter.shortCode} · ${state.intensity}%",
                     style = VType.Mono,
                     color = Color.White,
                 )
             }
         }
 
-        // Edit filter row
         Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -152,30 +148,25 @@ fun PhotoPreviewScreen(
                 verticalAlignment = Alignment.Bottom,
             ) {
                 Text("Edit filter", style = VType.SecondarySmall, color = VColors.Ink70)
-                Text(activeFilter.category.uppercase(), style = VType.MonoLarge, color = VColors.Ink50)
+                Text(activeFilter.category.displayName.uppercase(), style = VType.MonoLarge, color = VColors.Ink50)
             }
             Spacer(Modifier.height(8.dp))
             LazyRow {
-                itemsIndexed(Filters.take(8)) { i, f ->
-                    val active = i == state.activeFilterIndex
+                items(FilterCatalog.all.take(8), key = { it.id }) { filter ->
+                    val active = filter.id == state.activeFilterId
                     Column(
                         Modifier
                             .padding(end = 10.dp)
-                            .clickable { vm.setFilter(i) },
+                            .clickable { vm.setFilterId(filter.id) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Box(
                             Modifier
                                 .size(48.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(photoBrush(photoKindAt(i)))
+                                .background(VColors.Ink12)
                         ) {
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .background(Brush.linearGradient(listOf(f.tintTop, f.tintBottom)))
-                                    .graphicsLayer { alpha = 0.85f }
-                            )
+                            FilterThumbnail(filter, Modifier.fillMaxSize())
                             if (active) {
                                 Box(
                                     Modifier
@@ -186,7 +177,7 @@ fun PhotoPreviewScreen(
                         }
                         Spacer(Modifier.height(5.dp))
                         Text(
-                            f.name,
+                            filter.displayName,
                             style = VType.Caption.copy(
                                 fontSize = 10.sp,
                                 fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
@@ -198,7 +189,6 @@ fun PhotoPreviewScreen(
             }
         }
 
-        // Intensity slider
         Column(Modifier.padding(horizontal = 18.dp, vertical = 4.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -218,7 +208,6 @@ fun PhotoPreviewScreen(
 
         Spacer(Modifier.weight(1f))
 
-        // Action row: Retake + Save photo (1.4× wider)
         Row(
             Modifier
                 .fillMaxWidth()
@@ -258,5 +247,21 @@ fun PhotoPreviewScreen(
                 Text("Save photo", style = VType.BodySemi, color = VColors.Paper)
             }
         }
+    }
+}
+
+@Composable
+private fun FilterThumbnail(filter: Filter, modifier: Modifier = Modifier) {
+    val app = LocalContext.current.applicationContext as VCamApplication
+    val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, key1 = filter.id) {
+        value = app.thumbnailRenderer.thumbnailFor(filter)
+    }
+    bitmap?.let {
+        Image(
+            bitmap = it.asImageBitmap(),
+            contentDescription = filter.displayName,
+            contentScale = ContentScale.Crop,
+            modifier = modifier,
+        )
     }
 }

@@ -9,7 +9,9 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.vcam.data.Filters
+import com.vcam.camera.parseCubeLutFromAssets
+import com.vcam.color.FilterCatalog
+import com.vcam.color.OffscreenLutProcessor
 import com.vcam.data.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +25,7 @@ import java.util.Date
 import java.util.Locale
 
 data class PhotoPreviewState(
-    val activeFilterIndex: Int = 0,
+    val activeFilterId: String = FilterCatalog.all.first().id,
     val intensity: Int = 100,
     val timestamp: String = "",
     val dimensions: String = "",
@@ -32,29 +34,35 @@ data class PhotoPreviewState(
 )
 
 class PhotoPreviewViewModel(
-    private val context: Context,
-    private val repo: SettingsRepository,
+    private val context: Context? = null,
+    private val repo: SettingsRepository? = null,
+    private val offscreenProcessor: OffscreenLutProcessor? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PhotoPreviewState())
     val state: StateFlow<PhotoPreviewState> = _state.asStateFlow()
+    private var sourceBitmap: Bitmap? = null
+    private var renderToken = 0
 
     init {
-        viewModelScope.launch {
-            repo.settings.collect { user ->
-                _state.update {
-                    val idx = Filters.indexOfFirst { it.id == user.defaultFilterId }.coerceAtLeast(0)
-                    it.copy(activeFilterIndex = idx, intensity = user.defaultIntensity)
+        if (repo != null) {
+            viewModelScope.launch {
+                repo.settings.collect { user ->
+                    val resolvedId = FilterCatalog.byId(user.defaultFilterId)?.id ?: FilterCatalog.all.first().id
+                    _state.update { it.copy(activeFilterId = resolvedId, intensity = user.defaultIntensity) }
+                    renderActiveFilter()
                 }
             }
         }
     }
 
     fun loadPhoto(uriString: String?) {
+        val appContext = context ?: return
         if (uriString.isNullOrBlank() || uriString == "preview") return
         viewModelScope.launch {
-            val (bmp, w, h) = withContext(Dispatchers.IO) { decode(uriString) }
+            val (bmp, w, h) = withContext(Dispatchers.IO) { decode(appContext, uriString) }
             if (bmp != null) {
+                sourceBitmap = bmp
                 _state.update {
                     it.copy(
                         bitmap = bmp,
@@ -62,20 +70,36 @@ class PhotoPreviewViewModel(
                         dimensions = "$w × $h",
                     )
                 }
+                renderActiveFilter()
             }
         }
     }
 
-    private fun decode(uriString: String): Triple<Bitmap?, Int, Int> = runCatching {
+    private fun renderActiveFilter() {
+        val appContext = context ?: return
+        val processor = offscreenProcessor ?: return
+        val source = sourceBitmap ?: return
+        val filter = FilterCatalog.byId(_state.value.activeFilterId) ?: FilterCatalog.all.first()
+        val intensity = _state.value.intensity / 100f
+        val token = ++renderToken
+        viewModelScope.launch {
+            val lut = withContext(Dispatchers.IO) { parseCubeLutFromAssets(appContext, filter.lutAsset) }
+            processor.process(source, lut, intensity) { rendered ->
+                if (token == renderToken && rendered != null) {
+                    _state.update { it.copy(bitmap = rendered) }
+                }
+            }
+        }
+    }
+
+    private fun decode(context: Context, uriString: String): Triple<Bitmap?, Int, Int> = runCatching {
         val uri = Uri.parse(uriString)
         val resolver = context.contentResolver
-        // First decode bounds only.
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
         val srcW = bounds.outWidth.takeIf { it > 0 } ?: return@runCatching Triple(null, 0, 0)
         val srcH = bounds.outHeight.takeIf { it > 0 } ?: return@runCatching Triple(null, 0, 0)
 
-        // Downsample so the longer edge is ≤ 1600px — plenty for the 4:3 preview.
         val target = 1600
         var sample = 1
         while ((srcW / sample) > target || (srcH / sample) > target) sample *= 2
@@ -112,16 +136,23 @@ class PhotoPreviewViewModel(
         }
     }
 
-    fun setFilter(i: Int) = _state.update { it.copy(activeFilterIndex = i.coerceIn(0, Filters.size - 1)) }
+    fun setFilterId(id: String) = _state.update {
+        val resolvedId = FilterCatalog.byId(id)?.id ?: FilterCatalog.all.first().id
+        it.copy(activeFilterId = resolvedId)
+    }.also { renderActiveFilter() }
+
     fun setIntensity(v: Int) = _state.update { it.copy(intensity = v.coerceIn(0, 100)) }
+        .also { renderActiveFilter() }
+
     fun toggleStar() = _state.update { it.copy(starred = !it.starred) }
 
     class Factory(
         private val context: Context,
         private val repo: SettingsRepository,
+        private val offscreenProcessor: OffscreenLutProcessor,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            PhotoPreviewViewModel(context.applicationContext, repo) as T
+            PhotoPreviewViewModel(context.applicationContext, repo, offscreenProcessor) as T
     }
 }
