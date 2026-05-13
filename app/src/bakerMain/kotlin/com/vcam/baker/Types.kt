@@ -47,4 +47,6 @@ data class FilterParams(
     val channelMixer: ChannelMixer = ChannelMixer.identity(),
     val toneCurve: ToneCurve = ToneCurve.linear(),
     val splitToning: SplitToning? = null,
+    val hueShiftDegrees: Float = 0f,
+    val defaultIntensity: Float = 1f,
 )
