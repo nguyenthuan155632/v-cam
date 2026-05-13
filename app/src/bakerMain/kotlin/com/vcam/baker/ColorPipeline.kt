@@ -163,7 +163,7 @@ object ColorPipeline {
     }
 
     private fun curveLookup(v: Float, curve: ToneCurve): Float {
-        val pts = curve.sortedPoints
+        val pts = curve.points
         if (v <= pts.first().first) return pts.first().second
         if (v >= pts.last().first) return pts.last().second
         for (i in 0 until pts.size - 1) {
