@@ -7,4 +7,5 @@ data class Filter(
     val shortCode: String,
     val lutAsset: String,
     val intensityCap: Float = 1f,
+    val defaultIntensity: Float = 1f,
 )
